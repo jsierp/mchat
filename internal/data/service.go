@@ -1,7 +1,6 @@
 package data
 
 import (
-	"fmt"
 	"io"
 	"log"
 
@@ -29,11 +28,11 @@ func GetData() []Message {
 		log.Fatal("AUTH ", err)
 	}
 
-	count, size, err := c.Stat()
+	// count, size, err := c.Stat()
 	if err != nil {
 		log.Fatal("STAT ", err)
 	}
-	fmt.Println("Messages count: ", count, ", messages size:", size, "\n")
+	// fmt.Println("Messages count: ", count, ", messages size:", size, "\n")
 
 	msgs, _ := c.List(0)
 	for _, mid := range msgs {

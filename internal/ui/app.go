@@ -17,10 +17,20 @@ func (a *App) GetMessages() {
 	messages := data.GetData()
 	a.list.Clear()
 	for _, msg := range messages {
-		a.list.AddItem(msg.Subject, "", 'a', func() {
+		a.list.AddItem(msg.Subject, "", 0, func() {
 			a.textView.SetText(msg.Content)
 		})
 	}
+	a.initList()
+}
+
+func (a *App) initList() {
+	a.list.AddItem("Fetch", "Get messages", 'm', func() {
+		a.GetMessages()
+	}).AddItem("Quit", "Press to exit", 'q', func() {
+		a.app.Stop()
+	})
+	a.list.ShowSecondaryText(true)
 }
 
 func NewApp() *App {
@@ -32,12 +42,7 @@ func NewApp() *App {
 		SetWrap(true).
 		SetBorder(true).
 		SetTitle(" Chat ")
-	textView.SetText("initial text")
-
-	list.AddItem("Quit", "Press to exit", 'q', func() {
-		app.Stop()
-	})
-	list.ShowSecondaryText(false)
+	textView.SetText("Welcome to mChat. Press 'm' to fetch the messages.")
 
 	flex := tview.NewFlex().
 		AddItem(list, 0, 1, true).
@@ -49,9 +54,7 @@ func NewApp() *App {
 		list:     list,
 		textView: textView,
 	}
-	list.AddItem("Fetch", "Get messages", 'm', func() {
-		a.GetMessages()
-	})
+	a.initList()
 	return a
 }
 
