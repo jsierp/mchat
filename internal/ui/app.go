@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"fmt"
+	"log"
+	"os"
+
 	"github.com/rivo/tview"
 
 	"mchat/internal/data"
@@ -14,7 +18,7 @@ type App struct {
 }
 
 func (a *App) GetMessages() {
-	messages := data.GetData()
+	messages := data.GetChats()
 	a.list.Clear()
 	for _, msg := range messages {
 		a.list.AddItem(msg.Subject, "", 0, func() {
@@ -29,11 +33,22 @@ func (a *App) initList() {
 		a.GetMessages()
 	}).AddItem("Quit", "Press to exit", 'q', func() {
 		a.app.Stop()
+	}).AddItem("Logs", "Show logs", 'l', func() {
+		a.app.Suspend(func() {
+			fmt.Scanln()
+		})
 	})
 	a.list.ShowSecondaryText(true)
 }
 
 func NewApp() *App {
+	file, err := os.OpenFile("mchat.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Fatalf("failed to open log file: %v", err)
+	}
+	log.SetOutput(file)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	app := tview.NewApplication()
 	list := tview.NewList()
 
