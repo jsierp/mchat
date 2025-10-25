@@ -1,6 +1,7 @@
 package data
 
 import (
+	"io"
 	"log"
 
 	"mchat/pkg/pop3"
@@ -22,6 +23,24 @@ func GetChats() []Message {
 		log.Println(err)
 	}
 	defer conn.Quit()
+
+	msginfos, err := conn.List()
+	if err != nil {
+		log.Println(err)
+	}
+
+	for _, m := range msginfos {
+		log.Printf("Retrieving msg %d of size %d ready\n", m.Id, m.Size)
+		msg, err := conn.Retr(m.Id)
+		if err != nil {
+			log.Println(err)
+		} else {
+			log.Println(msg.Header.AddressList("From"))
+			bs, _ := io.ReadAll(msg.Body)
+			// content comes after content type \n\n, need to decode b64 of the content only
+			log.Println(string(bs))
+		}
+	}
 
 	return messages
 }

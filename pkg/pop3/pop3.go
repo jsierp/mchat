@@ -2,10 +2,12 @@ package pop3
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
 	"net"
+	"net/mail"
 	"strings"
 	"time"
 )
@@ -19,6 +21,11 @@ type Pop3 struct {
 
 type Connection struct {
 	conn net.Conn
+}
+
+type MsgInfo struct {
+	Id   int
+	Size int
 }
 
 func New(host string, port string) Pop3 {
@@ -109,4 +116,78 @@ func (c *Connection) Quit() error {
 	}
 
 	return nil
+}
+
+func (c *Connection) List() ([]MsgInfo, error) {
+	c.SetDeadline()
+	_, err := fmt.Fprint(c.conn, "LIST\r\n")
+	if err != nil {
+		return nil, err
+	}
+
+	c.SetDeadline()
+	reader := bufio.NewReader(c.conn)
+	msg, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+	log.Print(msg)
+	if !strings.HasPrefix(msg, "+OK") {
+		return nil, errors.New("LIST command failed")
+	}
+
+	var n int
+	_, err = fmt.Sscanf(msg, "+OK %d", &n)
+	if err != nil {
+		return nil, errors.New("LIST size failed")
+	}
+
+	msgs := []MsgInfo{}
+	for range n {
+		msg, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+
+		msginfo := MsgInfo{}
+		_, err = fmt.Sscanf(msg, "%d %d", &msginfo.Id, &msginfo.Size)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, msginfo)
+	}
+
+	return msgs, nil
+}
+
+func (c *Connection) Retr(id int) (*mail.Message, error) {
+	c.SetDeadline()
+	_, err := fmt.Fprintf(c.conn, "RETR %d\r\n", id)
+	if err != nil {
+		return nil, err
+	}
+	reader := bufio.NewReader(c.conn)
+	msg, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+	log.Print(msg)
+	if !strings.HasPrefix(msg, "+OK") {
+		return nil, errors.New("RETR failed")
+	}
+
+	var buf bytes.Buffer
+
+	for {
+		msg, err = reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if msg == ".\r\n" {
+			break
+		}
+		buf.WriteString(msg)
+	}
+
+	return mail.ReadMessage(bytes.NewReader(buf.Bytes()))
 }
