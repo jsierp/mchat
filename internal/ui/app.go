@@ -1,28 +1,54 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 	"os"
 
-	"github.com/rivo/tview"
-
 	"mchat/internal/data"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type App struct {
-	app      *tview.Application
-	flex     *tview.Flex
-	list     *tview.List
-	textView *tview.TextView
+	app  *tview.Application
+	flex *tview.Flex
+	list *tview.List
+	chat *tview.Flex
+}
+
+func (a *App) RenderChat(chat *data.Chat) {
+	msgs := chat.Messages
+	a.chat.Clear()
+	el := tview.NewTextView()
+	el.SetDynamicColors(true).
+		SetWrap(true).
+		SetBorder(true).
+		SetTitle("Chat with " + chat.Contact)
+	el.ScrollToEnd()
+
+	text := ""
+	for _, msg := range msgs {
+		text += msg.Date + "\n\n" + msg.Content + "\n\n----------------\n\n"
+	}
+
+	el.SetText(text)
+
+	input := tview.NewTextArea()
+	input.SetBorder(true).SetTitle("Send Message")
+
+	a.chat.AddItem(el, 0, 1, false)
+	a.chat.AddItem(input, 5, 1, true)
 }
 
 func (a *App) GetMessages() {
-	messages := data.GetChats()
+	chats := data.GetChats()
 	a.list.Clear()
-	for _, msg := range messages {
-		a.list.AddItem(msg.Subject, "", 0, func() {
-			a.textView.SetText(msg.Content)
+	for _, chat := range chats {
+		msg := chat.Messages[0]
+		a.list.AddItem(msg.From.Name, msg.From.Address, 0, func() {
+			a.RenderChat(chat)
+			a.app.SetFocus(a.chat)
 		})
 	}
 	a.initList()
@@ -33,10 +59,6 @@ func (a *App) initList() {
 		a.GetMessages()
 	}).AddItem("Quit", "Press to exit", 'q', func() {
 		a.app.Stop()
-	}).AddItem("Logs", "Show logs", 'l', func() {
-		a.app.Suspend(func() {
-			fmt.Scanln()
-		})
 	})
 	a.list.ShowSecondaryText(true)
 }
@@ -58,16 +80,24 @@ func NewApp() *App {
 		SetBorder(true).
 		SetTitle(" Chat ")
 	textView.SetText("Welcome to mChat. Press 'm' to fetch the messages.")
+	chat := tview.NewFlex()
+	chat.SetDirection(tview.FlexRow)
+	chat.SetInputCapture(func(e *tcell.EventKey) *tcell.EventKey {
+		if e.Key() == tcell.KeyESC || e.Key() == tcell.KeyLeft {
+			app.SetFocus(list)
+		}
+		return e
+	})
 
 	flex := tview.NewFlex().
 		AddItem(list, 0, 1, true).
-		AddItem(textView, 0, 2, false)
+		AddItem(chat, 0, 2, false)
 
 	a := &App{
-		app:      app,
-		flex:     flex,
-		list:     list,
-		textView: textView,
+		app:  app,
+		flex: flex,
+		list: list,
+		chat: chat,
 	}
 	a.initList()
 	return a
