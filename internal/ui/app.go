@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"mchat/internal/config"
 	"mchat/internal/data"
 
 	"github.com/gdamore/tcell/v2"
@@ -11,10 +12,12 @@ import (
 )
 
 type App struct {
-	app  *tview.Application
-	flex *tview.Flex
-	list *tview.List
-	chat *tview.Flex
+	app   *tview.Application
+	cfg   *config.Config
+	pages *tview.Pages
+	flex  *tview.Flex
+	list  *tview.List
+	chat  *tview.Flex
 }
 
 func (a *App) RenderChat(chat *data.Chat) {
@@ -63,15 +66,16 @@ func (a *App) initList() {
 	a.list.ShowSecondaryText(true)
 }
 
-func NewApp() *App {
+func setLogsFile() {
 	file, err := os.OpenFile("mchat.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}
 	log.SetOutput(file)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
 
-	app := tview.NewApplication()
+func (a *App) initInboxPage() *tview.Flex {
 	list := tview.NewList()
 
 	textView := tview.NewTextView()
@@ -84,7 +88,7 @@ func NewApp() *App {
 	chat.SetDirection(tview.FlexRow)
 	chat.SetInputCapture(func(e *tcell.EventKey) *tcell.EventKey {
 		if e.Key() == tcell.KeyESC || e.Key() == tcell.KeyLeft {
-			app.SetFocus(list)
+			a.app.SetFocus(list)
 		}
 		return e
 	})
@@ -93,18 +97,36 @@ func NewApp() *App {
 		AddItem(list, 0, 1, true).
 		AddItem(chat, 0, 2, false)
 
-	a := &App{
-		app:  app,
-		flex: flex,
-		list: list,
-		chat: chat,
-	}
+	a.flex = flex
+	a.list = list
+	a.chat = chat
 	a.initList()
+
+	return flex
+}
+
+func NewApp() *App {
+	setLogsFile()
+	cfg, err := config.LoadConfig()
+	log.Println("Loaded Config for User:", cfg.Login)
+
+	if err != nil {
+		panic(err)
+	}
+	pages := tview.NewPages()
+	app := tview.NewApplication()
+
+	a := &App{app: app, pages: pages, cfg: cfg}
+
+	pages.AddPage("config", a.initConfigPage(), true, true).
+		AddPage("inbox", a.initInboxPage(), true, false)
+	a.app.SetRoot(pages, true)
+
 	return a
 }
 
 func (a *App) Run() {
-	if err := a.app.SetRoot(a.flex, true).SetFocus(a.list).Run(); err != nil {
+	if err := a.app.Run(); err != nil {
 		panic(err)
 	}
 }
