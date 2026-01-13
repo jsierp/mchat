@@ -7,8 +7,11 @@ import (
 )
 
 type Config struct {
-	Login    string `json:"login"`
-	Password string `json:"password"`
+	Login        string `json:"login"`
+	Password     string `json:"password"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	Google       bool   `json:"google"`
 }
 
 func GetDefault() *Config {

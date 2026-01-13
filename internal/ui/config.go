@@ -24,6 +24,26 @@ func (a *App) openMChatForm(page *tview.Flex) {
 	a.app.SetFocus(form)
 }
 
+func (a *App) openGooglePage(page *tview.Flex) {
+	svc := config.NewGoogleAuthService()
+	url := svc.GetGoogleUrl()
+	urlView := tview.NewTextView().SetText("Go to the URL:\n\n" + url)
+	page.Clear()
+	page.AddItem(urlView, 0, 1, true)
+
+	go func() {
+		code := svc.WaitForAuthCode()
+		cfg, _ := svc.ExchangeCode(code)
+		a.cfg = cfg
+		config.SaveConfig(cfg)
+
+		a.app.QueueUpdateDraw(func() {
+			a.pages.SwitchToPage("inbox")
+			a.app.SetFocus(a.pages.GetPage("inbox"))
+		})
+	}()
+}
+
 func (a *App) initConfigPage() *tview.Flex {
 	menu := tview.NewList()
 
@@ -31,7 +51,7 @@ func (a *App) initConfigPage() *tview.Flex {
 	menu.AddItem("MChat", "Use MChat Account", 'm', func() {
 		a.openMChatForm(page)
 	}).AddItem("Google", "Connect with Gmail Account", 'g', func() {
-		a.app.Stop()
+		a.openGooglePage(page)
 	}).AddItem("Quit", "Exit the Application", 'q', func() {
 		a.app.Stop()
 	}).ShowSecondaryText(true)
