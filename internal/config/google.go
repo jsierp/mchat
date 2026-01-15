@@ -53,7 +53,9 @@ func (svc *GoogleAuthService) ExchangeCode(code string) (*Config, error) {
 
 	return &Config{
 		Google:       true,
+		Login:        "recent:mchatgolang@gmail.com",
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
+		Expiry:       token.Expiry,
 	}, nil
 }

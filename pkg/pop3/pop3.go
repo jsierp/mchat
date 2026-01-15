@@ -3,6 +3,8 @@ package pop3
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -20,7 +22,8 @@ type Pop3 struct {
 }
 
 type Connection struct {
-	conn net.Conn
+	conn   net.Conn
+	reader *bufio.Reader
 }
 
 type MsgInfo struct {
@@ -35,16 +38,23 @@ func New(host string, port string) Pop3 {
 	}
 }
 
-func (p *Pop3) Conn() (Connection, error) {
+func (p *Pop3) Conn(doTls bool) (Connection, error) {
 	log.Println("Initializing connection")
-	conn, err := net.Dial("tcp", net.JoinHostPort(p.host, p.port))
-	c := Connection{conn: conn}
+	var conn net.Conn
+	var err error
+	if doTls {
+		conn, err = tls.Dial("tcp", net.JoinHostPort(p.host, p.port), nil)
+	} else {
+		conn, err = net.Dial("tcp", net.JoinHostPort(p.host, p.port))
+	}
+	reader := bufio.NewReader(conn)
+	c := Connection{conn: conn, reader: reader}
 	if err != nil {
 		return c, err
 	}
 	c.SetDeadline()
-	reader := bufio.NewReader(conn)
-	msg, err := reader.ReadString('\n')
+
+	msg, err := c.reader.ReadString('\n')
 	if err != nil {
 		return c, err
 	}
@@ -57,6 +67,49 @@ func (p *Pop3) Conn() (Connection, error) {
 
 func (c *Connection) SetDeadline() {
 	c.conn.SetDeadline(time.Now().Add(TIMEOUT))
+}
+
+func (c *Connection) checkResponseOK() error {
+	msg, err := c.reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(msg, "+OK") {
+		return errors.New(msg)
+	}
+	log.Println("Received Response:", msg)
+	return nil
+}
+
+func getXOAuth2String(user, token string) string {
+	str := fmt.Sprintf("user=%s\x01auth=Bearer %s\x01\x01", user, token)
+	return base64.StdEncoding.EncodeToString([]byte(str))
+}
+
+func (c *Connection) XOAuth2(user, token string) error {
+	c.SetDeadline()
+	log.Println("Sending AUTH XOAUTH")
+	if _, err := fmt.Fprintf(c.conn, "AUTH XOAUTH2\r\n"); err != nil {
+		return err
+	}
+	msg, err := c.reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(msg, "+") {
+		return errors.New(msg)
+	}
+
+	authStr := getXOAuth2String(user, token)
+	log.Println("Sending XOAuth2 String", authStr)
+	if _, err := fmt.Fprintf(c.conn, "%s\r\n", authStr); err != nil {
+		return err
+	}
+	if err := c.checkResponseOK(); err != nil {
+		return err
+	}
+	log.Println("Received:", msg)
+	return nil
 }
 
 func (c *Connection) Auth(user string, pass string) error {

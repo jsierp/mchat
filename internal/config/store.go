@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Config struct {
-	Login        string `json:"login"`
-	Password     string `json:"password"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	Google       bool   `json:"google"`
+	Login        string    `json:"login"`
+	Password     string    `json:"password"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	Google       bool      `json:"google"`
+	Expiry       time.Time `json:"expiry"`
 }
 
 func GetDefault() *Config {

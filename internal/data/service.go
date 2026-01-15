@@ -3,20 +3,17 @@ package data
 import (
 	"cmp"
 	"encoding/base64"
-	"errors"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net/mail"
 	"slices"
 	"strings"
-	"unicode"
 
+	"mchat/internal/config"
 	"mchat/pkg/pop3"
 )
-
-// GetChats
-// NewChat
-// SendMessage
 
 type Message struct {
 	From    mail.Address
@@ -29,37 +26,57 @@ type Chat struct {
 	Messages []*Message
 }
 
-func getContent(msg []byte) (string, error) {
-	// non-html content starts after double breakline
-	parts := strings.Split(string(msg), "\r\n\r\n")
-	if len(parts) <= 1 {
-		return "", errors.New("No content found")
+func getPlainText(msg *mail.Message) (string, error) {
+	contentType := msg.Header.Get("Content-Type")
+	if contentType == "" {
+		body, _ := io.ReadAll(msg.Body)
+		return string(body), nil
 	}
-	content, err := base64.StdEncoding.DecodeString(parts[1])
+	return parsePart(msg.Body, contentType, msg.Header.Get("Content-Transfer-Encoding"))
+}
+func parsePart(body io.Reader, contentType string, encoding string) (string, error) {
+	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return "", err
 	}
-	text := string(content)
-	// everything after -- is regarded as a signature
-	text = strings.Split(text, "--")[0]
-	// cut first line, which is a 'preview'
-	firstNL := strings.IndexByte(text, '\n')
-	if firstNL != -1 {
-		text = text[firstNL:]
+
+	if mediaType == "text/plain" {
+		if encoding == "base64" {
+			reader := base64.NewDecoder(base64.StdEncoding, body)
+			content, _ := io.ReadAll(reader)
+			return string(content), nil
+		}
+		content, _ := io.ReadAll(body)
+		return string(content), nil
 	}
-	return strings.TrimFunc(text, func(r rune) bool {
-		return unicode.IsSpace(r) || !unicode.IsGraphic(r) || r == '\u034f'
-	}), nil
+
+	if strings.HasPrefix(mediaType, "multipart/") {
+		mr := multipart.NewReader(body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				continue
+			}
+			result, _ := parsePart(p, p.Header.Get("Content-Type"), p.Header.Get("Content-Transfer-Encoding"))
+			if result != "" {
+				return result, nil
+			}
+		}
+	}
+
+	return "", nil
 }
 
 func processMessage(msg *mail.Message) *Message {
-	bs, _ := io.ReadAll(msg.Body)
 	fromList, _ := msg.Header.AddressList("From")
 	var address mail.Address
 	if len(fromList) > 0 {
 		address = *fromList[0]
 	}
-	content, err := getContent(bs)
+	content, err := getPlainText(msg)
 	if err != nil {
 		content = ""
 	}
@@ -76,20 +93,36 @@ func processMessage(msg *mail.Message) *Message {
 	}
 }
 
-func getMessages() []*Message {
-	p := pop3.New("localhost", "1110")
-	conn, err := p.Conn()
+func getMessages(c *config.Config) []*Message {
+	var p pop3.Pop3
+	var conn pop3.Connection
+	var err error
+
+	if c.Google {
+		p = pop3.New("pop.gmail.com", "995")
+		conn, err = p.Conn(true)
+	} else {
+		p = pop3.New("localhost", "1110")
+		conn, err = p.Conn(false)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := conn.Auth("odoo", "odoo"); err != nil {
-		log.Println(err)
+
+	if c.Google {
+		err = conn.XOAuth2(c.Login, c.AccessToken)
+	} else {
+		err = conn.Auth("odoo", "odoo")
+	}
+
+	if err != nil {
+		log.Fatal(err)
 	}
 	defer conn.Quit()
 
 	msginfos, err := conn.List()
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 
 	var messages []*Message
@@ -106,8 +139,8 @@ func getMessages() []*Message {
 	return messages
 }
 
-func GetChats() []*Chat {
-	msgs := getMessages()
+func GetChats(c *config.Config) []*Chat {
+	msgs := getMessages(c)
 	chats := make(map[string]*Chat)
 
 	for _, msg := range msgs {

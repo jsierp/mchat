@@ -45,7 +45,7 @@ func (a *App) RenderChat(chat *data.Chat) {
 }
 
 func (a *App) GetMessages() {
-	chats := data.GetChats()
+	chats := data.GetChats(a.cfg)
 	a.list.Clear()
 	for _, chat := range chats {
 		msg := chat.Messages[0]
@@ -108,7 +108,6 @@ func (a *App) initInboxPage() *tview.Flex {
 func NewApp() *App {
 	setLogsFile()
 	cfg, err := config.LoadConfig()
-	log.Println("Loaded Config for User:", cfg.Login)
 
 	if err != nil {
 		panic(err)
@@ -120,6 +119,11 @@ func NewApp() *App {
 
 	pages.AddPage("config", a.initConfigPage(), true, true).
 		AddPage("inbox", a.initInboxPage(), true, false)
+
+	if cfg.Login != "" || cfg.Google {
+		pages.SwitchToPage("inbox")
+	}
+
 	a.app.SetRoot(pages, true)
 
 	return a
