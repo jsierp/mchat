@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"mchat/internal/config"
+	"mchat/internal/auth_google"
 
 	"github.com/rivo/tview"
 )
@@ -12,11 +12,7 @@ func (a *App) openMChatForm(page *tview.Flex) {
 	password := tview.NewInputField().SetLabel("Password").SetFieldWidth(20).SetMaskCharacter('*')
 	form.AddFormItem(username).AddFormItem(password)
 	form.AddButton("Save", func() {
-		a.cfg = &config.Config{
-			Login:    username.GetText(),
-			Password: password.GetText(),
-		}
-		config.SaveConfig(a.cfg)
+		a.svc.SaveBasicConfig(username.GetText(), password.GetText())
 		a.pages.SwitchToPage("inbox")
 	})
 	page.Clear()
@@ -25,7 +21,7 @@ func (a *App) openMChatForm(page *tview.Flex) {
 }
 
 func (a *App) openGooglePage(page *tview.Flex) {
-	svc := config.NewGoogleAuthService()
+	svc := auth_google.NewGoogleAuthService()
 	url := svc.GetGoogleUrl()
 	urlView := tview.NewTextView().SetText("Go to the URL:\n\n" + url)
 	page.Clear()
@@ -33,9 +29,8 @@ func (a *App) openGooglePage(page *tview.Flex) {
 
 	go func() {
 		code := svc.WaitForAuthCode()
-		cfg, _ := svc.ExchangeCode(code)
-		a.cfg = cfg
-		config.SaveConfig(cfg)
+		token, _ := svc.ExchangeCode(code)
+		a.svc.SaveGoogleConfig("mchatgolang@gmail.com", token)
 
 		a.app.QueueUpdateDraw(func() {
 			a.pages.SwitchToPage("inbox")

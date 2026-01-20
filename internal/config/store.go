@@ -4,16 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
+
+	"golang.org/x/oauth2"
 )
 
 type Config struct {
-	Login        string    `json:"login"`
-	Password     string    `json:"password"`
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	Google       bool      `json:"google"`
-	Expiry       time.Time `json:"expiry"`
+	User     string       `json:"user"`
+	Password string       `json:"password,omitempty"`
+	Token    oauth2.Token `json:"token,omitempty"`
 }
 
 func GetDefault() *Config {
@@ -30,19 +28,6 @@ func GetPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(appDir, "config.json"), nil
-}
-
-func SaveConfig(cfg *Config) error {
-	path, err := GetPath()
-	if err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(path, data, 0600)
-	return err
 }
 
 func LoadConfig() (*Config, error) {
@@ -64,4 +49,21 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func (c *Config) SaveConfig() error {
+	path, err := GetPath()
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(path, data, 0600)
+	return err
+}
+
+func (c *Config) IsGoogle() bool {
+	return c.Token.AccessToken != ""
 }

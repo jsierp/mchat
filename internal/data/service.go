@@ -2,103 +2,100 @@ package data
 
 import (
 	"cmp"
-	"encoding/base64"
-	"io"
+	"fmt"
 	"log"
-	"mime"
-	"mime/multipart"
-	"net/mail"
 	"slices"
-	"strings"
 
+	"mchat/internal/auth_google"
 	"mchat/internal/config"
+	"mchat/internal/models"
 	"mchat/pkg/pop3"
+
+	"golang.org/x/oauth2"
 )
 
-type Message struct {
-	From    mail.Address
-	Date    string
-	Content string
+type DataService struct {
+	cfg *config.Config
 }
 
-type Chat struct {
-	Contact  string // to be replaced by a name + email address ?
-	Messages []*Message
-}
-
-func getPlainText(msg *mail.Message) (string, error) {
-	contentType := msg.Header.Get("Content-Type")
-	if contentType == "" {
-		body, _ := io.ReadAll(msg.Body)
-		return string(body), nil
+func NewDataService() (*DataService, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
 	}
-	return parsePart(msg.Body, contentType, msg.Header.Get("Content-Transfer-Encoding"))
+
+	return &DataService{cfg: cfg}, nil
 }
-func parsePart(body io.Reader, contentType string, encoding string) (string, error) {
-	mediaType, params, err := mime.ParseMediaType(contentType)
+
+func (s *DataService) GetChats() []*models.Chat {
+	msgs := s.getMessages()
+	chats := make(map[string]*models.Chat)
+
+	for _, msg := range msgs {
+		from := msg.Contact.Address
+		chat, ok := chats[from]
+		if ok {
+			chat.Messages = append(chat.Messages, msg)
+		} else {
+			chats[from] = &models.Chat{
+				Contact:  msg.Contact,
+				Messages: []*models.Message{msg},
+			}
+		}
+	}
+
+	var ordChats []*models.Chat
+	for _, chat := range chats {
+		ordChats = append(ordChats, chat)
+		slices.SortFunc(chat.Messages, func(a, b *models.Message) int {
+			return cmp.Compare(a.Date, b.Date)
+		})
+	}
+
+	return ordChats
+}
+
+func (s *DataService) IsConfigured() bool {
+	return s.cfg.User != ""
+}
+
+func (s *DataService) SaveBasicConfig(user, pass string) {
+	s.cfg = &config.Config{
+		User:     user,
+		Password: pass,
+	}
+	s.cfg.SaveConfig()
+}
+
+func (s *DataService) SaveGoogleConfig(user string, token *oauth2.Token) {
+	s.cfg = &config.Config{
+		User:  user,
+		Token: *token,
+	}
+	s.cfg.SaveConfig()
+}
+
+func (s *DataService) GetActiveToken() (string, error) {
+	authSvc := auth_google.NewGoogleAuthService()
+	token, err := authSvc.GetActiveToken(&s.cfg.Token)
 	if err != nil {
 		return "", err
 	}
 
-	if mediaType == "text/plain" {
-		if encoding == "base64" {
-			reader := base64.NewDecoder(base64.StdEncoding, body)
-			content, _ := io.ReadAll(reader)
-			return string(content), nil
-		}
-		content, _ := io.ReadAll(body)
-		return string(content), nil
+	if s.cfg.Token.AccessToken != token.AccessToken {
+		s.cfg.Token = *token
+		s.cfg.SaveConfig()
 	}
-
-	if strings.HasPrefix(mediaType, "multipart/") {
-		mr := multipart.NewReader(body, params["boundary"])
-		for {
-			p, err := mr.NextPart()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				continue
-			}
-			result, _ := parsePart(p, p.Header.Get("Content-Type"), p.Header.Get("Content-Transfer-Encoding"))
-			if result != "" {
-				return result, nil
-			}
-		}
-	}
-
-	return "", nil
+	return s.cfg.Token.AccessToken, nil
 }
 
-func processMessage(msg *mail.Message) *Message {
-	fromList, _ := msg.Header.AddressList("From")
-	var address mail.Address
-	if len(fromList) > 0 {
-		address = *fromList[0]
-	}
-	content, err := getPlainText(msg)
-	if err != nil {
-		content = ""
-	}
-	date, err := msg.Header.Date()
-	dateStr := "error"
-	if err == nil {
-		dateStr = date.Format("2006-01-02 15:04")
-	}
-
-	return &Message{
-		From:    address,
-		Date:    dateStr,
-		Content: content,
-	}
-}
-
-func getMessages(c *config.Config) []*Message {
+func (s *DataService) getMessages() []*models.Message {
 	var p pop3.Pop3
-	var conn pop3.Connection
+	var conn *pop3.Connection
 	var err error
+	google_auth := s.cfg.Token.AccessToken != ""
 
-	if c.Google {
+	if google_auth {
 		p = pop3.New("pop.gmail.com", "995")
 		conn, err = p.Conn(true)
 	} else {
@@ -109,10 +106,14 @@ func getMessages(c *config.Config) []*Message {
 		log.Fatal(err)
 	}
 
-	if c.Google {
-		err = conn.XOAuth2(c.Login, c.AccessToken)
+	if google_auth {
+		token, err := s.GetActiveToken()
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = conn.XOAuth2(fmt.Sprintf("recent:%s", s.cfg.User), token)
 	} else {
-		err = conn.Auth("odoo", "odoo")
+		err = conn.Auth(s.cfg.User, s.cfg.Password)
 	}
 
 	if err != nil {
@@ -125,44 +126,16 @@ func getMessages(c *config.Config) []*Message {
 		log.Fatal(err)
 	}
 
-	var messages []*Message
+	var messages []*models.Message
 	for _, m := range msginfos {
 		log.Printf("Retrieving msg %d of size %d ready\n", m.Id, m.Size)
 		msg, err := conn.Retr(m.Id)
 		if err != nil {
-			log.Println(err)
+			log.Printf("error: %v", err)
 		} else {
 			messages = append(messages, processMessage(msg))
 		}
 	}
 
 	return messages
-}
-
-func GetChats(c *config.Config) []*Chat {
-	msgs := getMessages(c)
-	chats := make(map[string]*Chat)
-
-	for _, msg := range msgs {
-		from := msg.From.String()
-		chat, ok := chats[from]
-		if ok {
-			chat.Messages = append(chat.Messages, msg)
-		} else {
-			chats[from] = &Chat{
-				Contact:  from,
-				Messages: []*Message{msg},
-			}
-		}
-	}
-
-	var ordChats []*Chat
-	for _, chat := range chats {
-		ordChats = append(ordChats, chat)
-		slices.SortFunc(chat.Messages, func(a, b *Message) int {
-			return cmp.Compare(a.Date, b.Date)
-		})
-	}
-
-	return ordChats
 }

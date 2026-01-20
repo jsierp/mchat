@@ -1,4 +1,4 @@
-package config
+package auth_google
 
 import (
 	"context"
@@ -23,11 +23,20 @@ func NewGoogleAuthService() *GoogleAuthService {
 	return &GoogleAuthService{cfg: c}
 }
 
-func (svc *GoogleAuthService) GetGoogleUrl() string {
-	return svc.cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+func (s *GoogleAuthService) GetActiveToken(t *oauth2.Token) (*oauth2.Token, error) {
+	ts := s.cfg.TokenSource(context.Background(), t)
+	newToken, err := ts.Token()
+	if err != nil {
+		return nil, err
+	}
+	return newToken, nil
 }
 
-func (svc *GoogleAuthService) WaitForAuthCode() string {
+func (s *GoogleAuthService) GetGoogleUrl() string {
+	return s.cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+}
+
+func (s *GoogleAuthService) WaitForAuthCode() string {
 	codeChan := make(chan string)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -37,25 +46,17 @@ func (svc *GoogleAuthService) WaitForAuthCode() string {
 	})
 	server := &http.Server{Addr: ":8080", Handler: mux}
 	go server.ListenAndServe()
+	defer server.Close()
 
 	code := <-codeChan
-
-	server.Close()
 
 	return code
 }
 
-func (svc *GoogleAuthService) ExchangeCode(code string) (*Config, error) {
-	token, err := svc.cfg.Exchange(context.Background(), code)
+func (s *GoogleAuthService) ExchangeCode(code string) (*oauth2.Token, error) {
+	token, err := s.cfg.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, err
 	}
-
-	return &Config{
-		Google:       true,
-		Login:        "recent:mchatgolang@gmail.com",
-		AccessToken:  token.AccessToken,
-		RefreshToken: token.RefreshToken,
-		Expiry:       token.Expiry,
-	}, nil
+	return token, nil
 }

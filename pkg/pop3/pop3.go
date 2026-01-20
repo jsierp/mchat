@@ -38,7 +38,7 @@ func New(host string, port string) Pop3 {
 	}
 }
 
-func (p *Pop3) Conn(doTls bool) (Connection, error) {
+func (p *Pop3) Conn(doTls bool) (*Connection, error) {
 	log.Println("Initializing connection")
 	var conn net.Conn
 	var err error
@@ -48,20 +48,15 @@ func (p *Pop3) Conn(doTls bool) (Connection, error) {
 		conn, err = net.Dial("tcp", net.JoinHostPort(p.host, p.port))
 	}
 	reader := bufio.NewReader(conn)
-	c := Connection{conn: conn, reader: reader}
+	c := &Connection{conn: conn, reader: reader}
 	if err != nil {
 		return c, err
 	}
 	c.SetDeadline()
 
-	msg, err := c.reader.ReadString('\n')
-	if err != nil {
-		return c, err
+	if _, err := c.checkResponseOK(); err != nil {
+		return nil, err
 	}
-	if !strings.HasPrefix(msg, "+OK") {
-		return c, errors.New("Connection failed")
-	}
-	log.Print(msg)
 	return c, err
 }
 
@@ -69,16 +64,15 @@ func (c *Connection) SetDeadline() {
 	c.conn.SetDeadline(time.Now().Add(TIMEOUT))
 }
 
-func (c *Connection) checkResponseOK() error {
+func (c *Connection) checkResponseOK() (string, error) {
 	msg, err := c.reader.ReadString('\n')
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !strings.HasPrefix(msg, "+OK") {
-		return errors.New(msg)
+		return msg, errors.New(msg)
 	}
-	log.Println("Received Response:", msg)
-	return nil
+	return msg, nil
 }
 
 func getXOAuth2String(user, token string) string {
@@ -88,7 +82,6 @@ func getXOAuth2String(user, token string) string {
 
 func (c *Connection) XOAuth2(user, token string) error {
 	c.SetDeadline()
-	log.Println("Sending AUTH XOAUTH")
 	if _, err := fmt.Fprintf(c.conn, "AUTH XOAUTH2\r\n"); err != nil {
 		return err
 	}
@@ -101,73 +94,51 @@ func (c *Connection) XOAuth2(user, token string) error {
 	}
 
 	authStr := getXOAuth2String(user, token)
-	log.Println("Sending XOAuth2 String", authStr)
+	log.Println("Sending XOAuth2 String")
 	if _, err := fmt.Fprintf(c.conn, "%s\r\n", authStr); err != nil {
 		return err
 	}
-	if err := c.checkResponseOK(); err != nil {
+	if _, err := c.checkResponseOK(); err != nil {
 		return err
 	}
-	log.Println("Received:", msg)
 	return nil
 }
 
 func (c *Connection) Auth(user string, pass string) error {
-	log.Println("Sending User")
 	c.SetDeadline()
+
+	log.Println("Sending User")
 	_, err := fmt.Fprintf(c.conn, "USER %s\r\n", user)
 	if err != nil {
 		return err
 	}
-	c.SetDeadline()
-	reader := bufio.NewReader(c.conn)
-	msg, err := reader.ReadString('\n')
-	if err != nil {
+	if _, err := c.checkResponseOK(); err != nil {
 		return err
-	}
-	log.Print(msg)
-	if !strings.HasPrefix(msg, "+OK") {
-		return errors.New("USER command failed")
 	}
 
 	log.Println("Sending password")
-	c.SetDeadline()
 	_, err = fmt.Fprintf(c.conn, "PASS %s\r\n", pass)
 	if err != nil {
 		return err
 	}
-	c.SetDeadline()
-	msg, err = reader.ReadString('\n')
-	if err != nil {
+	if _, err := c.checkResponseOK(); err != nil {
 		return err
-	}
-	log.Print(msg)
-	if !strings.HasPrefix(msg, "+OK") {
-		return errors.New("PASS command failed")
 	}
 	return nil
 }
 
 func (c *Connection) Quit() error {
-	defer c.conn.Close()
-	log.Println("Quitting")
 	c.SetDeadline()
+	defer c.conn.Close()
+
+	log.Println("Quitting")
 	_, err := fmt.Fprint(c.conn, "QUIT\r\n")
 	if err != nil {
 		return err
 	}
-
-	c.SetDeadline()
-	reader := bufio.NewReader(c.conn)
-	msg, err := reader.ReadString('\n')
-	if err != nil {
+	if _, err := c.checkResponseOK(); err != nil {
 		return err
 	}
-	log.Print(msg)
-	if !strings.HasPrefix(msg, "+OK") {
-		return errors.New("QUIT command failed")
-	}
-
 	return nil
 }
 
@@ -177,16 +148,9 @@ func (c *Connection) List() ([]MsgInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	c.SetDeadline()
-	reader := bufio.NewReader(c.conn)
-	msg, err := reader.ReadString('\n')
-	if err != nil {
+	var msg string
+	if msg, err = c.checkResponseOK(); err != nil {
 		return nil, err
-	}
-	log.Print(msg)
-	if !strings.HasPrefix(msg, "+OK") {
-		return nil, errors.New("LIST command failed")
 	}
 
 	var n int
@@ -197,7 +161,7 @@ func (c *Connection) List() ([]MsgInfo, error) {
 
 	msgs := []MsgInfo{}
 	for range n {
-		msg, err := reader.ReadString('\n')
+		msg, err := c.reader.ReadString('\n')
 		if err != nil {
 			return nil, err
 		}
@@ -219,20 +183,13 @@ func (c *Connection) Retr(id int) (*mail.Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	reader := bufio.NewReader(c.conn)
-	msg, err := reader.ReadString('\n')
-	if err != nil {
+	if _, err := c.checkResponseOK(); err != nil {
 		return nil, err
-	}
-	log.Print(msg)
-	if !strings.HasPrefix(msg, "+OK") {
-		return nil, errors.New("RETR failed")
 	}
 
 	var buf bytes.Buffer
-
 	for {
-		msg, err = reader.ReadString('\n')
+		msg, err := c.reader.ReadString('\n')
 		if err != nil {
 			return nil, err
 		}

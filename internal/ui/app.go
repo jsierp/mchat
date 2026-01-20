@@ -1,33 +1,37 @@
 package ui
 
 import (
-	"log"
-	"os"
-
-	"mchat/internal/config"
-	"mchat/internal/data"
+	"mchat/internal/models"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"golang.org/x/oauth2"
 )
+
+type DataService interface {
+	SaveBasicConfig(user, pass string)
+	SaveGoogleConfig(user string, token *oauth2.Token)
+	IsConfigured() bool
+	GetChats() []*models.Chat
+}
 
 type App struct {
 	app   *tview.Application
-	cfg   *config.Config
 	pages *tview.Pages
 	flex  *tview.Flex
 	list  *tview.List
 	chat  *tview.Flex
+	svc   DataService
 }
 
-func (a *App) RenderChat(chat *data.Chat) {
+func (a *App) RenderChat(chat *models.Chat) {
 	msgs := chat.Messages
 	a.chat.Clear()
 	el := tview.NewTextView()
 	el.SetDynamicColors(true).
 		SetWrap(true).
 		SetBorder(true).
-		SetTitle("Chat with " + chat.Contact)
+		SetTitle("Chat with " + chat.Contact.Name)
 	el.ScrollToEnd()
 
 	text := ""
@@ -45,11 +49,10 @@ func (a *App) RenderChat(chat *data.Chat) {
 }
 
 func (a *App) GetMessages() {
-	chats := data.GetChats(a.cfg)
+	chats := a.svc.GetChats()
 	a.list.Clear()
 	for _, chat := range chats {
-		msg := chat.Messages[0]
-		a.list.AddItem(msg.From.Name, msg.From.Address, 0, func() {
+		a.list.AddItem(chat.Contact.Name, chat.Contact.Address, 0, func() {
 			a.RenderChat(chat)
 			a.app.SetFocus(a.chat)
 		})
@@ -64,15 +67,6 @@ func (a *App) initList() {
 		a.app.Stop()
 	})
 	a.list.ShowSecondaryText(true)
-}
-
-func setLogsFile() {
-	file, err := os.OpenFile("mchat.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		log.Fatalf("failed to open log file: %v", err)
-	}
-	log.SetOutput(file)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
 func (a *App) initInboxPage() *tview.Flex {
@@ -105,22 +99,16 @@ func (a *App) initInboxPage() *tview.Flex {
 	return flex
 }
 
-func NewApp() *App {
-	setLogsFile()
-	cfg, err := config.LoadConfig()
-
-	if err != nil {
-		panic(err)
-	}
+func NewApp(svc DataService) *App {
 	pages := tview.NewPages()
 	app := tview.NewApplication()
 
-	a := &App{app: app, pages: pages, cfg: cfg}
+	a := &App{app: app, pages: pages, svc: svc}
 
 	pages.AddPage("config", a.initConfigPage(), true, true).
 		AddPage("inbox", a.initInboxPage(), true, false)
 
-	if cfg.Login != "" || cfg.Google {
+	if svc.IsConfigured() {
 		pages.SwitchToPage("inbox")
 	}
 
@@ -129,8 +117,9 @@ func NewApp() *App {
 	return a
 }
 
-func (a *App) Run() {
+func (a *App) Run() error {
 	if err := a.app.Run(); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
