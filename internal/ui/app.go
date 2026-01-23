@@ -2,6 +2,7 @@ package ui
 
 import (
 	"mchat/internal/models"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -13,6 +14,7 @@ type DataService interface {
 	SaveGoogleConfig(user string, token *oauth2.Token)
 	IsConfigured() bool
 	GetChats() []*models.Chat
+	SendMessage(chat *models.Chat, msg string)
 }
 
 type App struct {
@@ -43,6 +45,19 @@ func (a *App) RenderChat(chat *models.Chat) {
 
 	input := tview.NewTextArea()
 	input.SetBorder(true).SetTitle("Send Message")
+	input.SetInputCapture(func(e *tcell.EventKey) *tcell.EventKey {
+		if e.Key() == tcell.KeyEnter {
+			text := el.GetText(true)
+			msg := input.GetText()
+
+			text += time.Now().Format("2006-01-02 15:04") + "\n\nYou: " + msg + "\n\n----------------\n\n"
+			a.svc.SendMessage(chat, msg)
+			el.SetText(text)
+			input.SetText("", true)
+			return nil
+		}
+		return e
+	})
 
 	a.chat.AddItem(el, 0, 1, false)
 	a.chat.AddItem(input, 5, 1, true)

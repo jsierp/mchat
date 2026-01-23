@@ -4,11 +4,13 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"net/smtp"
 	"slices"
 
 	"mchat/internal/auth_google"
 	"mchat/internal/config"
 	"mchat/internal/models"
+	"mchat/pkg/oxsmtp"
 	"mchat/pkg/pop3"
 
 	"golang.org/x/oauth2"
@@ -25,6 +27,28 @@ func NewDataService() (*DataService, error) {
 	}
 
 	return &DataService{cfg: cfg}, nil
+}
+
+func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
+	token, err := s.GetActiveToken()
+	if err != nil {
+		return err
+	}
+	smtpAuth := oxsmtp.Auth{User: s.cfg.User, Token: token}
+
+	header := make(map[string]string)
+	header["From"] = s.cfg.User
+	header["To"] = chat.Contact.Address
+	header["Subject"] = "Notification from MChat"
+	header["Content-Type"] = "text/plain; charset=\"utf-8\""
+
+	message := ""
+	for k, v := range header {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + msg
+
+	return smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Contact.Address}, []byte(msg))
 }
 
 func (s *DataService) GetChats() []*models.Chat {

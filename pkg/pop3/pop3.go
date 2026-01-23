@@ -75,7 +75,7 @@ func (c *Connection) checkResponseOK() (string, error) {
 	return msg, nil
 }
 
-func getXOAuth2String(user, token string) string {
+func GetXOAuth2String(user, token string) string {
 	str := fmt.Sprintf("user=%s\x01auth=Bearer %s\x01\x01", user, token)
 	return base64.StdEncoding.EncodeToString([]byte(str))
 }
@@ -93,7 +93,7 @@ func (c *Connection) XOAuth2(user, token string) error {
 		return errors.New(msg)
 	}
 
-	authStr := getXOAuth2String(user, token)
+	authStr := GetXOAuth2String(user, token)
 	log.Println("Sending XOAuth2 String")
 	if _, err := fmt.Fprintf(c.conn, "%s\r\n", authStr); err != nil {
 		return err
