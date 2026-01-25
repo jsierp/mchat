@@ -4,6 +4,10 @@ import (
 	"mchat/internal/models"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"golang.org/x/oauth2"
@@ -14,7 +18,7 @@ type DataService interface {
 	SaveGoogleConfig(user string, token *oauth2.Token)
 	IsConfigured() bool
 	GetChats() []*models.Chat
-	SendMessage(chat *models.Chat, msg string)
+	SendMessage(chat *models.Chat, msg string) error
 }
 
 type App struct {
@@ -137,4 +141,166 @@ func (a *App) Run() error {
 		return err
 	}
 	return nil
+}
+
+var (
+	titleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("205")).
+			MarginBottom(1).
+			Bold(true)
+	controlsStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			MarginLeft(2).
+			MarginTop(1)
+	chatStyle = lipgloss.NewStyle().
+			BorderForeground(lipgloss.Color("12")).
+			PaddingLeft(2)
+)
+
+type mode int
+
+const (
+	modeConfig mode = iota
+	modeList
+	modeChat
+	modeMessage
+)
+
+type model struct {
+	mode      mode
+	svc       DataService
+	chatsList list.Model
+	chatView  viewport.Model
+	chats     []*models.Chat
+	width     int
+	height    int
+}
+
+// View implements [tea.Model].
+type chatItem struct {
+	name     string
+	address  string
+	selected bool
+}
+
+func (c chatItem) FilterValue() string { return c.name + c.address }
+
+func (c chatItem) Title() string { return c.name }
+
+func (c chatItem) Description() string { return c.address }
+
+func InitialModel(svc DataService) model {
+	chatsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 40, 40)
+	chatsList.SetShowStatusBar(false)
+	chatsList.SetFilteringEnabled(false)
+	chatsList.SetShowTitle(false)
+
+	chatView := viewport.New(40, 40)
+	chatView.SetContent("Select a chat")
+
+	return model{
+		mode:      modeList,
+		svc:       svc,
+		chatsList: chatsList,
+		chatView:  chatView,
+	}
+
+}
+
+func (m model) viewControls() string {
+	s := controlsStyle.Render("\nControls:")
+	s += controlsStyle.Render("• r: refresh")
+	s += controlsStyle.Render("• a: add a chat")
+	s += controlsStyle.Render("• c: enter config")
+	s += controlsStyle.Render("• q: quit")
+	return s
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) refresh() model {
+	chats := m.svc.GetChats()
+	var items []list.Item
+	for _, chat := range chats {
+		items = append(items, chatItem{
+			name:    chat.Contact.Name,
+			address: chat.Contact.Address,
+		})
+	}
+	m.chatsList.SetItems(items)
+	m.chats = chats
+	return m
+}
+
+func (m model) renderChat(chat *models.Chat) model {
+	content := ""
+	for _, msg := range chat.Messages {
+		content += msg.Date + "\n\n" + msg.Content + "\n\n----------------\n\n"
+	}
+	m.chatView.SetContent(content)
+
+	return m
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.chatView.Width = 80
+		return m, nil
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "r":
+			m = m.refresh()
+			return m, nil
+		case "l":
+			if m.mode == modeList {
+				m.mode = modeChat
+			}
+			return m, nil
+		case "h":
+			if m.mode == modeChat {
+				m.mode = modeList
+			}
+			return m, nil
+		case "enter", " ":
+			if len(m.chatsList.Items()) > 0 {
+				index := m.chatsList.Index()
+				m = m.renderChat(m.chats[index])
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+
+	switch m.mode {
+	case modeChat:
+		m.chatView, cmd = m.chatView.Update(msg)
+	case modeList:
+		m.chatsList, cmd = m.chatsList.Update(msg)
+	}
+
+	return m, cmd
+}
+
+func (m model) viewChat() string {
+	if m.mode == modeChat {
+		return chatStyle.
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			Render(m.chatView.View())
+	}
+	return chatStyle.Render(m.chatView.View())
+}
+
+func (m model) View() string {
+	title := titleStyle.Render("mChat - the only messaging app you need")
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, m.chatsList.View(), m.viewChat())
+	view := lipgloss.JoinVertical(lipgloss.Left, title, body)
+
+	view += m.viewControls()
+	return view
 }

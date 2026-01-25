@@ -5,6 +5,8 @@ import (
 	"mchat/internal/data"
 	"mchat/internal/ui"
 	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
@@ -18,10 +20,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to setup dataservice: %v", err)
 	}
+	app := tea.NewProgram(ui.InitialModel(svc), tea.WithAltScreen())
 
-	app := ui.NewApp(svc)
-
-	if err := app.Run(); err != nil {
+	if _, err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
