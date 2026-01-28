@@ -3,8 +3,6 @@ package ui
 import (
 	"mchat/internal/models"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/oauth2"
@@ -53,12 +51,8 @@ type model struct {
 	width  int
 	height int
 
-	chats []*models.Chat
-
-	chatsList    list.Model
-	chatViewport viewport.Model
-
-	cfg configModel
+	chats chatsModel
+	cfg   configModel
 }
 
 // View implements [tea.Model].
@@ -71,21 +65,12 @@ func (i listItem) Description() string { return i.description }
 func (i listItem) FilterValue() string { return i.title }
 
 func InitialModel(svc DataService) model {
-	chatsList := list.New([]list.Item{}, list.NewDefaultDelegate(), 40, 40)
-	chatsList.SetShowStatusBar(false)
-	chatsList.SetFilteringEnabled(false)
-	chatsList.SetShowTitle(false)
-
-	chatViewport := viewport.New(40, 40)
-	chatViewport.SetContent("Select a chat")
-
 	return model{
-		focus:        focusChats,
-		view:         viewChats,
-		svc:          svc,
-		chatsList:    chatsList,
-		chatViewport: chatViewport,
-		cfg:          initConfigModel(),
+		focus: focusChats,
+		view:  viewChats,
+		svc:   svc,
+		chats: initChatsModel(),
+		cfg:   initConfigModel(),
 	}
 }
 
