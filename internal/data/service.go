@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/smtp"
 	"slices"
+	"sync"
+	"time"
 
 	"mchat/internal/auth_google"
 	"mchat/internal/config"
@@ -17,16 +19,29 @@ import (
 )
 
 type DataService struct {
-	cfg *config.Config
+	cfg      *config.Config
+	cfgMutex sync.RWMutex
+	msgChan  chan<- models.Message
 }
 
-func NewDataService() (*DataService, error) {
+func NewDataService(msgChan chan<- models.Message) (*DataService, error) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
+	svc := &DataService{cfg: cfg, msgChan: msgChan}
+	// TODO: load existing messages from the DB
+	go svc.startPolling()
 
-	return &DataService{cfg: cfg}, nil
+	return svc, nil
+}
+
+func (s *DataService) startPolling() {
+	for {
+		log.Println("checking for updates..")
+		s.getMessages()
+		time.Sleep(time.Second * 15)
+	}
 }
 
 func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
@@ -52,6 +67,7 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
 }
 
 func (s *DataService) GetChats() []*models.Chat {
+	//
 	msgs := s.getMessages()
 	chats := make(map[string]*models.Chat)
 
@@ -157,7 +173,9 @@ func (s *DataService) getMessages() []*models.Message {
 		if err != nil {
 			log.Printf("error: %v", err)
 		} else {
-			messages = append(messages, processMessage(msg))
+			m := processMessage(msg)
+			s.msgChan <- *m
+			messages = append(messages, m)
 		}
 	}
 

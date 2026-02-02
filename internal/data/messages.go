@@ -70,8 +70,10 @@ func processMessage(msg *mail.Message) *models.Message {
 	if err == nil {
 		dateStr = date.Format("2006-01-02 15:04")
 	}
+	id := msg.Header.Get("Message-ID")
 
 	return &models.Message{
+		Id:      id,
 		Contact: address,
 		Content: content,
 		Date:    dateStr,

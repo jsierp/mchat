@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"mchat/internal/data"
+	"mchat/internal/models"
 	"mchat/internal/ui"
 	"os"
 
@@ -16,11 +17,20 @@ func main() {
 	}
 	defer logFile.Close()
 
-	svc, err := data.NewDataService()
+	msgChan := make(chan models.Message, 100)
+	svc, err := data.NewDataService(msgChan)
+
 	if err != nil {
 		log.Fatalf("failed to setup dataservice: %v", err)
 	}
 	app := tea.NewProgram(ui.InitialModel(svc), tea.WithAltScreen())
+
+	go func() {
+		for {
+			m := <-msgChan
+			app.Send(m)
+		}
+	}()
 
 	if _, err := app.Run(); err != nil {
 		log.Fatal(err)

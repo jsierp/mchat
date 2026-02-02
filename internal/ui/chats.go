@@ -99,7 +99,6 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		log.Println(msg)
 		w := msg.Width
 		m.chats.contactsList.SetWidth(w / 3)
 		m.chats.messagesViewport.Width = w - w/3 // TODO: it doesn't fully work
@@ -202,4 +201,33 @@ func (m model) refreshChats() model {
 	m.chats.contactsList.SetItems(items)
 	m.chats.chats = chats
 	return m
+}
+
+func (m model) newMessage(msg models.Message) model {
+	for _, c := range m.chats.chats {
+		if c.Contact.Name == msg.Contact.Name && c.Contact.Address == msg.Contact.Address {
+			c.Messages = appendIfNew(c.Messages, &msg)
+			return m
+		}
+	}
+	c := models.Chat{Contact: msg.Contact, Messages: []*models.Message{&msg}}
+	m.chats.chats = append(m.chats.chats, &c)
+
+	items := m.chats.contactsList.Items()
+	items = append(items, listItem{
+		title:       msg.Contact.Name,
+		description: msg.Contact.Address,
+	})
+	m.chats.contactsList.SetItems(items)
+
+	return m
+}
+
+func appendIfNew(msgs []*models.Message, msg *models.Message) []*models.Message {
+	for _, m := range msgs {
+		if m.Id == msg.Id {
+			return msgs
+		}
+	}
+	return append(msgs, msg)
 }

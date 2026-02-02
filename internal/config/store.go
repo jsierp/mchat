@@ -8,6 +8,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// TODO make config thread-safe
+
 type Config struct {
 	User     string       `json:"user"`
 	Password string       `json:"password,omitempty"`
