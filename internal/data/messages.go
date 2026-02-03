@@ -98,7 +98,33 @@ func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 		ChatAddress: chatAddress,
 		From:        from.Address,
 		To:          to.Address,
-		Content:     content,
+		Content:     removeQuotedText(content),
 		Date:        dateStr,
 	}
+}
+
+func removeQuotedText(s string) string {
+	var stopAt int
+	lines := strings.SplitAfter(s, "\n")
+
+	for i, l := range lines {
+		if len(l) > 3 && l[:3] == "___" {
+			// Microsoft
+			stopAt = i
+			break
+		}
+		if l != "" && l[0] == '>' {
+			// Google
+			stopAt = max(0, i-3)
+		}
+	}
+	if stopAt == 0 {
+		return s
+	}
+
+	res := ""
+	for _, l := range lines[:stopAt] {
+		res += l
+	}
+	return strings.TrimSpace(res)
 }

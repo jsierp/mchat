@@ -174,6 +174,12 @@ func (c *Connection) List() ([]MsgInfo, error) {
 		msgs = append(msgs, msginfo)
 	}
 
+	// termination dot
+	_, err = c.reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
 	return msgs, nil
 }
 

@@ -67,7 +67,6 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
 }
 
 func (s *DataService) GetChats() []*models.Chat {
-	//
 	msgs := s.getMessages()
 	chats := make(map[string]*models.Chat)
 

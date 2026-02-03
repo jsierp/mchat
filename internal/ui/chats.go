@@ -22,16 +22,15 @@ type chatsModel struct {
 var (
 	chatStyle = lipgloss.NewStyle().
 			BorderForeground(lipgloss.Color("62")).
-			PaddingBottom(2).
-			PaddingRight(2).
-			MarginLeft(1)
+			Padding(2)
 	inputStyle = lipgloss.NewStyle().
 			BorderForeground(lipgloss.Color("62")).
-			Padding(1)
+			Padding(1).
+			Margin(1)
 )
 
 var chatFocusedStyle = chatStyle.
-	Border(lipgloss.NormalBorder(), false, true, false, false)
+	Border(lipgloss.RoundedBorder()).Padding(1)
 
 func initChatsModel() chatsModel {
 	contacts := list.New([]list.Item{}, list.NewDefaultDelegate(), 40, 40)
@@ -60,7 +59,7 @@ func (m model) viewChat() string {
 		input := inputStyle.Render(m.chats.textInput.View())
 		view = lipgloss.JoinVertical(lipgloss.Left, view, input)
 	} else {
-		view = chatStyle.MarginBottom(3).Render(m.chats.messagesViewport.View())
+		view = chatStyle.Render(m.chats.messagesViewport.View())
 	}
 	if m.focus == focusMessageInput {
 		input := inputStyle.Border(lipgloss.RoundedBorder()).Padding(0).Render(m.chats.textInput.View())
@@ -70,7 +69,8 @@ func (m model) viewChat() string {
 }
 
 func (m model) viewChats() string {
-	content := lipgloss.JoinHorizontal(lipgloss.Top, m.chats.contactsList.View(), m.viewChat())
+	list := lipgloss.NewStyle().MarginRight(1).Render(m.chats.contactsList.View())
+	content := lipgloss.JoinHorizontal(lipgloss.Top, list, m.viewChat())
 	content += m.helpChats()
 	return content
 }
@@ -204,9 +204,13 @@ func (m model) refreshChats() model {
 }
 
 func (m model) newMessage(msg *models.Message) model {
-	for _, c := range m.chats.chats {
+	index := m.chats.contactsList.Index()
+	for i, c := range m.chats.chats {
 		if c.Address == msg.ChatAddress {
 			c.Messages = appendIfNew(c.Messages, msg)
+			if i == index {
+				m = m.updateMessages(c)
+			}
 			return m
 		}
 	}
