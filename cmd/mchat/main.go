@@ -17,7 +17,7 @@ func main() {
 	}
 	defer logFile.Close()
 
-	msgChan := make(chan models.Message, 100)
+	msgChan := make(chan *models.Message, 100)
 	svc, err := data.NewDataService(msgChan)
 
 	if err != nil {

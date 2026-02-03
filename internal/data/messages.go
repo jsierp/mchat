@@ -55,12 +55,32 @@ func parsePart(body io.Reader, contentType string, encoding string) (string, err
 	return "", nil
 }
 
-func processMessage(msg *mail.Message) *models.Message {
+func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 	fromList, _ := msg.Header.AddressList("From")
-	var address *mail.Address
+	var from *mail.Address
 	if len(fromList) > 0 {
-		address = fromList[0]
+		from = fromList[0]
 	}
+
+	toList, _ := msg.Header.AddressList("To")
+	if len(toList) == 0 {
+		toList, _ = msg.Header.AddressList("Cc")
+	}
+	if len(toList) == 0 {
+		toList, _ = msg.Header.AddressList("Bcc")
+	}
+	var to *mail.Address
+	if len(toList) > 0 {
+		to = toList[0]
+	}
+
+	var chatAddress string
+	if msg.Header.Get("Delivered-To") != "" {
+		chatAddress = from.Address
+	} else {
+		chatAddress = to.Address
+	}
+
 	content, err := getPlainText(msg)
 	if err != nil {
 		content = ""
@@ -73,9 +93,12 @@ func processMessage(msg *mail.Message) *models.Message {
 	id := msg.Header.Get("Message-ID")
 
 	return &models.Message{
-		Id:      id,
-		Contact: address,
-		Content: content,
-		Date:    dateStr,
+		Id:          id,
+		Contact:     from.Name,
+		ChatAddress: chatAddress,
+		From:        from.Address,
+		To:          to.Address,
+		Content:     content,
+		Date:        dateStr,
 	}
 }

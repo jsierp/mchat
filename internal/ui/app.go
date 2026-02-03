@@ -82,7 +82,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
-	if msg, ok := msg.(models.Message); ok {
+	if msg, ok := msg.(*models.Message); ok {
 		return m.newMessage(msg), nil
 	}
 

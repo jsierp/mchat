@@ -21,10 +21,10 @@ import (
 type DataService struct {
 	cfg      *config.Config
 	cfgMutex sync.RWMutex
-	msgChan  chan<- models.Message
+	msgChan  chan<- *models.Message
 }
 
-func NewDataService(msgChan chan<- models.Message) (*DataService, error) {
+func NewDataService(msgChan chan<- *models.Message) (*DataService, error) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
 
 	header := make(map[string]string)
 	header["From"] = s.cfg.User
-	header["To"] = chat.Contact.Address
+	header["To"] = chat.Address
 	header["Subject"] = "Notification from MChat"
 	header["Content-Type"] = "text/plain; charset=\"utf-8\""
 
@@ -63,7 +63,7 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
 	}
 	message += "\r\n" + msg
 
-	return smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Contact.Address}, []byte(msg))
+	return smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Address}, []byte(msg))
 }
 
 func (s *DataService) GetChats() []*models.Chat {
@@ -72,13 +72,13 @@ func (s *DataService) GetChats() []*models.Chat {
 	chats := make(map[string]*models.Chat)
 
 	for _, msg := range msgs {
-		from := msg.Contact.Address
-		chat, ok := chats[from]
+		chat, ok := chats[msg.ChatAddress]
 		if ok {
 			chat.Messages = append(chat.Messages, msg)
 		} else {
-			chats[from] = &models.Chat{
-				Contact:  msg.Contact,
+			chats[msg.ChatAddress] = &models.Chat{
+				Name:     msg.Contact,
+				Address:  msg.ChatAddress,
 				Messages: []*models.Message{msg},
 			}
 		}
@@ -173,8 +173,8 @@ func (s *DataService) getMessages() []*models.Message {
 		if err != nil {
 			log.Printf("error: %v", err)
 		} else {
-			m := processMessage(msg)
-			s.msgChan <- *m
+			m := s.processMessage(msg)
+			s.msgChan <- m
 			messages = append(messages, m)
 		}
 	}

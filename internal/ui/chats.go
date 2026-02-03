@@ -194,8 +194,8 @@ func (m model) refreshChats() model {
 	var items []list.Item
 	for _, chat := range chats {
 		items = append(items, listItem{
-			title:       chat.Contact.Name,
-			description: chat.Contact.Address,
+			title:       chat.Name,
+			description: chat.Address,
 		})
 	}
 	m.chats.contactsList.SetItems(items)
@@ -203,20 +203,20 @@ func (m model) refreshChats() model {
 	return m
 }
 
-func (m model) newMessage(msg models.Message) model {
+func (m model) newMessage(msg *models.Message) model {
 	for _, c := range m.chats.chats {
-		if c.Contact.Name == msg.Contact.Name && c.Contact.Address == msg.Contact.Address {
-			c.Messages = appendIfNew(c.Messages, &msg)
+		if c.Address == msg.ChatAddress {
+			c.Messages = appendIfNew(c.Messages, msg)
 			return m
 		}
 	}
-	c := models.Chat{Contact: msg.Contact, Messages: []*models.Message{&msg}}
+	c := models.Chat{Address: msg.ChatAddress, Name: msg.Contact, Messages: []*models.Message{msg}}
 	m.chats.chats = append(m.chats.chats, &c)
 
 	items := m.chats.contactsList.Items()
 	items = append(items, listItem{
-		title:       msg.Contact.Name,
-		description: msg.Contact.Address,
+		title:       c.Name,
+		description: c.Address,
 	})
 	m.chats.contactsList.SetItems(items)
 

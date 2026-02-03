@@ -1,15 +1,17 @@
 package models
 
-import "net/mail"
-
 type Message struct {
-	Id      string
-	Contact *mail.Address
-	Content string
-	Date    string
+	Id          string
+	From        string
+	To          string
+	Contact     string
+	ChatAddress string
+	Content     string
+	Date        string
 }
 
 type Chat struct {
-	Contact  *mail.Address // TODO do not use a pointer
-	Messages []*Message    // TODO use slice of structs
+	Address  string
+	Name     string
+	Messages []*Message
 }
