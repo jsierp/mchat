@@ -27,6 +27,9 @@ var (
 			BorderForeground(lipgloss.Color("62")).
 			Padding(1).
 			Margin(1)
+	messageStyle = lipgloss.NewStyle().
+			BorderForeground(lipgloss.Color("62")).
+			Border(lipgloss.RoundedBorder(), false, false, true, false).Padding(1)
 )
 
 var chatFocusedStyle = chatStyle.
@@ -87,7 +90,8 @@ func (m model) helpChats() string {
 func (m model) updateMessages(chat *models.Chat) model {
 	content := ""
 	for _, msg := range chat.Messages {
-		content += msg.Date + "\n\n" + msg.Content + "\n\n----------------\n\n"
+		text := msg.Date + "\n\n" + msg.Content
+		content = lipgloss.JoinVertical(lipgloss.Left, content, messageStyle.Render(text))
 	}
 	m.chats.messagesViewport.SetContent(content)
 
