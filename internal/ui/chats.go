@@ -3,6 +3,7 @@ package ui
 import (
 	"log"
 	"mchat/internal/models"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -29,7 +30,7 @@ var (
 			Margin(1)
 	messageStyle = lipgloss.NewStyle().
 			BorderForeground(lipgloss.Color("62")).
-			Border(lipgloss.RoundedBorder(), false, false, true, false).Padding(1)
+			Border(lipgloss.RoundedBorder(), true, true, true, true).Padding(1)
 )
 
 var chatFocusedStyle = chatStyle.
@@ -91,7 +92,14 @@ func (m model) updateMessages(chat *models.Chat) model {
 	content := ""
 	for _, msg := range chat.Messages {
 		text := msg.Date + "\n\n" + msg.Content
-		content = lipgloss.JoinVertical(lipgloss.Left, content, messageStyle.Render(text))
+		var msgBubble string
+
+		if strings.Contains(msg.Id, "mchat") { // TODO: tmp solution for outgoing msgs
+			msgBubble = messageStyle.MarginLeft(60).BorderForeground(lipgloss.Color("#00ff00")).Align(lipgloss.Right).Render(text)
+		} else {
+			msgBubble = messageStyle.Render(text)
+		}
+		content = lipgloss.JoinVertical(lipgloss.Left, content, msgBubble)
 	}
 	m.chats.messagesViewport.SetContent(content)
 
@@ -119,8 +127,6 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q":
 				return m, tea.Quit
-			case "r":
-				return m.refreshChats(), nil
 			case "c":
 				m.view = viewConfig
 				return m, nil
@@ -143,8 +149,6 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "h":
 				m.focus = focusChats
 				return m, nil
-			case "r":
-				return m.refreshChats(), nil
 			case "c":
 				m.view = viewConfig
 				return m, nil
@@ -167,17 +171,12 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				index := m.chats.contactsList.Index()
-				err := m.svc.SendMessage(m.chats.chats[index], m.chats.textInput.Value())
+				msg, err := m.svc.SendMessage(m.chats.chats[index], m.chats.textInput.Value())
 				if err != nil {
 					// TODO - handle error
 					log.Println(err)
 				}
-				// TODO - handle with data storage, very temporary testing now
-				m.chats.chats[index].Messages = append(m.chats.chats[index].Messages, &models.Message{
-					Content: m.chats.textInput.Value(),
-					Date:    "Now",
-				})
-				m = m.updateMessages(m.chats.chats[index])
+				m = m.newMessage(msg)
 				m.chats.messagesViewport.GotoBottom()
 				m.focus = focusChat
 				m.chats.textInput.SetValue("")
@@ -193,20 +192,6 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) refreshChats() model {
-	chats := m.svc.GetChats()
-	var items []list.Item
-	for _, chat := range chats {
-		items = append(items, listItem{
-			title:       chat.Name,
-			description: chat.Address,
-		})
-	}
-	m.chats.contactsList.SetItems(items)
-	m.chats.chats = chats
-	return m
-}
-
 func (m model) newMessage(msg *models.Message) model {
 	index := m.chats.contactsList.Index()
 	for i, c := range m.chats.chats {
@@ -214,6 +199,7 @@ func (m model) newMessage(msg *models.Message) model {
 			c.Messages = appendIfNew(c.Messages, msg)
 			if i == index {
 				m = m.updateMessages(c)
+				m.chats.messagesViewport.GotoBottom()
 			}
 			return m
 		}

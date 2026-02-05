@@ -1,17 +1,18 @@
 package data
 
 import (
-	"cmp"
+	"bytes"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/smtp"
-	"slices"
 	"sync"
 	"time"
 
 	"mchat/internal/auth_google"
 	"mchat/internal/config"
 	"mchat/internal/models"
+	"mchat/internal/storage"
 	"mchat/pkg/oxsmtp"
 	"mchat/pkg/pop3"
 
@@ -19,9 +20,11 @@ import (
 )
 
 type DataService struct {
-	cfg      *config.Config
-	cfgMutex sync.RWMutex
-	msgChan  chan<- *models.Message
+	db              *sql.DB
+	cfg             *config.Config
+	cfgMutex        sync.RWMutex
+	msgChan         chan<- *models.Message
+	existingMsgsIds map[string]struct{}
 }
 
 func NewDataService(msgChan chan<- *models.Message) (*DataService, error) {
@@ -29,69 +32,77 @@ func NewDataService(msgChan chan<- *models.Message) (*DataService, error) {
 	if err != nil {
 		return nil, err
 	}
-	svc := &DataService{cfg: cfg, msgChan: msgChan}
-	// TODO: load existing messages from the DB
+
+	db, err := storage.GetDB()
+	if err != nil {
+		return nil, err
+	}
+
+	svc := &DataService{db: db, cfg: cfg, msgChan: msgChan, existingMsgsIds: make(map[string]struct{})}
+	svc.loadExistingMessages()
+
 	go svc.startPolling()
 
 	return svc, nil
 }
 
+func (s *DataService) loadExistingMessages() error {
+	msgs, err := storage.GetMessages(s.db)
+	if err != nil {
+		return err
+	}
+	for _, m := range msgs {
+		s.existingMsgsIds[m.Id] = struct{}{}
+		s.msgChan <- m
+	}
+	return nil
+}
+
 func (s *DataService) startPolling() {
 	for {
 		log.Println("checking for updates..")
-		s.getMessages()
+		s.fetchMessages()
 		time.Sleep(time.Second * 15)
 	}
 }
 
-func (s *DataService) SendMessage(chat *models.Chat, msg string) error {
+func (s *DataService) SendMessage(chat *models.Chat, msg string) (*models.Message, error) {
 	token, err := s.GetActiveToken()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	smtpAuth := oxsmtp.Auth{User: s.cfg.User, Token: token}
+	msgId := fmt.Sprintf("<%d@mchat.mchat>", time.Now().UnixNano())
+	date := time.Now()
 
-	header := make(map[string]string)
-	header["From"] = s.cfg.User
-	header["To"] = chat.Address
-	header["Subject"] = "Notification from MChat"
-	header["Content-Type"] = "text/plain; charset=\"utf-8\""
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "From: %s\r\n", s.cfg.User)
+	fmt.Fprintf(&b, "From: %s\r\n", s.cfg.User)
+	fmt.Fprintf(&b, "To: %s\r\n", chat.Address)
+	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&b, "Subject: Notification from MChat\r\n")
+	fmt.Fprintf(&b, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&b, "Content-Type: text/plain; charset=\"utf-8\"\r\n")
+	fmt.Fprintf(&b, "X-MCHAT-ID: %s\r\n", msgId)
+	fmt.Fprintf(&b, "\r\n")
+	fmt.Fprint(&b, msg)
 
-	message := ""
-	for k, v := range header {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-	message += "\r\n" + msg
-
-	return smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Address}, []byte(msg))
-}
-
-func (s *DataService) GetChats() []*models.Chat {
-	msgs := s.getMessages()
-	chats := make(map[string]*models.Chat)
-
-	for _, msg := range msgs {
-		chat, ok := chats[msg.ChatAddress]
-		if ok {
-			chat.Messages = append(chat.Messages, msg)
-		} else {
-			chats[msg.ChatAddress] = &models.Chat{
-				Name:     msg.Contact,
-				Address:  msg.ChatAddress,
-				Messages: []*models.Message{msg},
-			}
-		}
+	err = smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Address}, b.Bytes())
+	if err != nil {
+		return nil, err
 	}
 
-	var ordChats []*models.Chat
-	for _, chat := range chats {
-		ordChats = append(ordChats, chat)
-		slices.SortFunc(chat.Messages, func(a, b *models.Message) int {
-			return cmp.Compare(a.Date, b.Date)
-		})
+	m := &models.Message{
+		Id:          msgId,
+		From:        s.cfg.User,
+		To:          chat.Address,
+		Contact:     chat.Address,
+		ChatAddress: chat.Address,
+		Content:     msg,
+		Date:        date.Format(time.DateTime),
 	}
-
-	return ordChats
+	err = storage.SaveMessage(s.db, m)
+	return m, nil
 }
 
 func (s *DataService) IsConfigured() bool {
@@ -128,7 +139,7 @@ func (s *DataService) GetActiveToken() (string, error) {
 	return s.cfg.Token.AccessToken, nil
 }
 
-func (s *DataService) getMessages() []*models.Message {
+func (s *DataService) fetchMessages() {
 	var p pop3.Pop3
 	var conn *pop3.Connection
 	var err error
@@ -150,7 +161,7 @@ func (s *DataService) getMessages() []*models.Message {
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = conn.XOAuth2(fmt.Sprintf("recent:%s", s.cfg.User), token)
+		err = conn.XOAuth2(s.cfg.User, token)
 	} else {
 		err = conn.Auth(s.cfg.User, s.cfg.Password)
 	}
@@ -165,7 +176,6 @@ func (s *DataService) getMessages() []*models.Message {
 		log.Fatal(err)
 	}
 
-	var messages []*models.Message
 	for _, m := range msginfos {
 		log.Printf("Retrieving msg %d of size %d ready\n", m.Id, m.Size)
 		msg, err := conn.Retr(m.Id)
@@ -173,10 +183,11 @@ func (s *DataService) getMessages() []*models.Message {
 			log.Printf("error: %v", err)
 		} else {
 			m := s.processMessage(msg)
-			s.msgChan <- m
-			messages = append(messages, m)
+			if _, ok := s.existingMsgsIds[m.Id]; !ok {
+				storage.SaveMessage(s.db, m)
+				s.msgChan <- m
+				s.existingMsgsIds[m.Id] = struct{}{}
+			}
 		}
 	}
-
-	return messages
 }

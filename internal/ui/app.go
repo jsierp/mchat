@@ -12,8 +12,7 @@ type DataService interface {
 	SaveBasicConfig(user, pass string)
 	SaveGoogleConfig(user string, token *oauth2.Token)
 	IsConfigured() bool
-	GetChats() []*models.Chat
-	SendMessage(chat *models.Chat, msg string) error
+	SendMessage(chat *models.Chat, msg string) (*models.Message, error)
 }
 
 var (
