@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/smtp"
-	"sync"
 	"time"
 
 	"mchat/internal/auth_google"
@@ -22,7 +21,6 @@ import (
 type DataService struct {
 	db              *sql.DB
 	cfg             *config.Config
-	cfgMutex        sync.RWMutex
 	msgChan         chan<- *models.Message
 	existingMsgsIds map[string]struct{}
 }
@@ -39,7 +37,10 @@ func NewDataService(msgChan chan<- *models.Message) (*DataService, error) {
 	}
 
 	svc := &DataService{db: db, cfg: cfg, msgChan: msgChan, existingMsgsIds: make(map[string]struct{})}
-	svc.loadExistingMessages()
+	err = svc.loadExistingMessages()
+	if err != nil {
+		log.Println(err)
+	}
 
 	go svc.startPolling()
 
@@ -102,6 +103,9 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) (*models.Messag
 		Date:        date.Format(time.DateTime),
 	}
 	err = storage.SaveMessage(s.db, m)
+	if err != nil {
+		log.Println(err)
+	}
 	return m, nil
 }
 
@@ -114,7 +118,10 @@ func (s *DataService) SaveBasicConfig(user, pass string) {
 		User:     user,
 		Password: pass,
 	}
-	s.cfg.SaveConfig()
+	err := s.cfg.SaveConfig()
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (s *DataService) SaveGoogleConfig(user string, token *oauth2.Token) {
@@ -122,7 +129,10 @@ func (s *DataService) SaveGoogleConfig(user string, token *oauth2.Token) {
 		User:  user,
 		Token: *token,
 	}
-	s.cfg.SaveConfig()
+	err := s.cfg.SaveConfig()
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (s *DataService) GetActiveToken() (string, error) {
@@ -134,7 +144,10 @@ func (s *DataService) GetActiveToken() (string, error) {
 
 	if s.cfg.Token.AccessToken != token.AccessToken {
 		s.cfg.Token = *token
-		s.cfg.SaveConfig()
+		err = s.cfg.SaveConfig()
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	return s.cfg.Token.AccessToken, nil
 }
@@ -157,7 +170,8 @@ func (s *DataService) fetchMessages() {
 	}
 
 	if google_auth {
-		token, err := s.GetActiveToken()
+		var token string
+		token, err = s.GetActiveToken()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -169,7 +183,6 @@ func (s *DataService) fetchMessages() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Quit()
 
 	msginfos, err := conn.List()
 	if err != nil {
@@ -184,10 +197,18 @@ func (s *DataService) fetchMessages() {
 		} else {
 			m := s.processMessage(msg)
 			if _, ok := s.existingMsgsIds[m.Id]; !ok {
-				storage.SaveMessage(s.db, m)
+				err := storage.SaveMessage(s.db, m)
+				if err != nil {
+					log.Println(err)
+				}
 				s.msgChan <- m
 				s.existingMsgsIds[m.Id] = struct{}{}
 			}
 		}
+	}
+
+	err = conn.Quit()
+	if err != nil {
+		log.Println(err)
 	}
 }

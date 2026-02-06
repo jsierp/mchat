@@ -61,7 +61,10 @@ func (p *Pop3) Conn(doTls bool) (*Connection, error) {
 }
 
 func (c *Connection) SetDeadline() {
-	c.conn.SetDeadline(time.Now().Add(TIMEOUT))
+	err := c.conn.SetDeadline(time.Now().Add(TIMEOUT))
+	if err != nil {
+		log.Println("error setting deadline", err)
+	}
 }
 
 func (c *Connection) checkResponseOK() (string, error) {

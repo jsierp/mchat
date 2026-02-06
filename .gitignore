@@ -33,4 +33,4 @@ go.work.sum
 # .idea/
 # .vscode/
 
-internal/auth_google/secrets.go
+mchat

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"log"
 	"mchat/internal/auth_google"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -183,6 +184,7 @@ func (m model) updateConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case authResult:
 		if msg.err != nil {
+			log.Println(msg.err)
 			m.cfg.googleUrl = "An error occured! Try again by restarting configuration!"
 			return m, nil
 		} else {

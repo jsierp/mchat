@@ -47,9 +47,6 @@ type model struct {
 	view  view
 	focus focus
 
-	width  int
-	height int
-
 	chats chatsModel
 	cfg   configModel
 }
