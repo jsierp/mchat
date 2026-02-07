@@ -11,14 +11,24 @@ import (
 type DataService interface {
 	SaveBasicConfig(user, pass string)
 	SaveGoogleConfig(user string, token *oauth2.Token)
-	IsConfigured() bool
 	SendMessage(chat *models.Chat, msg string) (*models.Message, error)
 }
 
 var (
+	// TODO - light palette needs rework
+	colPrimary      = lipgloss.AdaptiveColor{Light: "#81c8be", Dark: "#81c8be"}
+	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#528a82", Dark: "#528a82"}
+	colSuccess      = lipgloss.AdaptiveColor{Light: "#a3be8c", Dark: "#a3be8c"}
+	colWarning      = lipgloss.AdaptiveColor{Light: "#ebcb8b", Dark: "#ebcb8b"}
+	colDanger       = lipgloss.AdaptiveColor{Light: "#bf616a", Dark: "#bf616a"}
+	colMuted        = lipgloss.AdaptiveColor{Light: "#777777", Dark: "#777777"}
+)
+
+var (
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
+			Foreground(colSuccess).
 			MarginBottom(1).
+			MarginLeft(1).
 			Bold(true)
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
@@ -51,7 +61,6 @@ type model struct {
 	cfg   configModel
 }
 
-// View implements [tea.Model].
 type listItem struct {
 	title, description string
 }

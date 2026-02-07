@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/mail"
 	"strings"
-	"time"
 )
 
 func getPlainText(msg *mail.Message) (string, error) {
@@ -87,10 +86,6 @@ func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 		content = ""
 	}
 	date, err := msg.Header.Date()
-	dateStr := "error"
-	if err == nil {
-		dateStr = date.Format(time.DateTime)
-	}
 	id := msg.Header.Get("X-MCHAT-ID")
 	if id == "" {
 		id = msg.Header.Get("Message-ID")
@@ -103,7 +98,7 @@ func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 		From:        from.Address,
 		To:          to.Address,
 		Content:     removeQuotedText(content),
-		Date:        dateStr,
+		Date:        date,
 	}
 }
 

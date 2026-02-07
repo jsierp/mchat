@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type Message struct {
 	Id          string
 	From        string
@@ -7,7 +9,7 @@ type Message struct {
 	Contact     string
 	ChatAddress string
 	Content     string
-	Date        string
+	Date        time.Time
 }
 
 type Chat struct {

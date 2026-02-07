@@ -63,7 +63,10 @@ func (s *DataService) startPolling() {
 	for {
 		if s.cfg.User != "" {
 			log.Println("checking for updates..")
-			s.fetchMessages()
+			err := s.fetchMessages()
+			if err != nil {
+				log.Println("error while fetching messages", err)
+			}
 		} else {
 			log.Println("app not configured yet. skiping fetch")
 		}
@@ -104,17 +107,13 @@ func (s *DataService) SendMessage(chat *models.Chat, msg string) (*models.Messag
 		Contact:     chat.Address,
 		ChatAddress: chat.Address,
 		Content:     msg,
-		Date:        date.Format(time.DateTime),
+		Date:        date,
 	}
 	err = storage.SaveMessage(s.db, m)
 	if err != nil {
 		log.Println(err)
 	}
 	return m, nil
-}
-
-func (s *DataService) IsConfigured() bool {
-	return s.cfg.User != ""
 }
 
 func (s *DataService) SaveBasicConfig(user, pass string) {
@@ -156,7 +155,7 @@ func (s *DataService) GetActiveToken() (string, error) {
 	return s.cfg.Token.AccessToken, nil
 }
 
-func (s *DataService) fetchMessages() {
+func (s *DataService) fetchMessages() error {
 	var p pop3.Pop3
 	var conn *pop3.Connection
 	var err error
@@ -170,7 +169,7 @@ func (s *DataService) fetchMessages() {
 		conn, err = p.Conn(false)
 	}
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if google_auth {
@@ -185,12 +184,12 @@ func (s *DataService) fetchMessages() {
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	msginfos, err := conn.List()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	for _, m := range msginfos {
@@ -212,7 +211,5 @@ func (s *DataService) fetchMessages() {
 	}
 
 	err = conn.Quit()
-	if err != nil {
-		log.Println(err)
-	}
+	return err
 }

@@ -22,22 +22,23 @@ type chatsModel struct {
 
 var (
 	chatStyle = lipgloss.NewStyle().
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(colPrimaryMuted).
 			Padding(2)
 	inputStyle = lipgloss.NewStyle().
 			BorderForeground(lipgloss.Color("62")).
 			Padding(1).
 			Margin(1)
-	messageStyle = lipgloss.NewStyle().
-			BorderForeground(lipgloss.Color("62")).
-			Border(lipgloss.RoundedBorder(), true, true, true, true).Padding(1)
 )
 
 var chatFocusedStyle = chatStyle.
-	Border(lipgloss.RoundedBorder()).Padding(1)
+	Border(lipgloss.ThickBorder(), false, false, false, true).Padding(1)
 
 func initChatsModel() chatsModel {
-	contacts := list.New([]list.Item{}, list.NewDefaultDelegate(), 40, 40)
+	d := list.NewDefaultDelegate()
+	d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(colPrimary).BorderForeground(colPrimary)
+	d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(colPrimaryMuted).BorderForeground(colPrimary)
+
+	contacts := list.New([]list.Item{}, d, 40, 40)
 	contacts.SetShowStatusBar(false)
 	contacts.SetFilteringEnabled(false)
 	contacts.SetShowTitle(false)
@@ -89,15 +90,35 @@ func (m model) helpChats() string {
 }
 
 func (m model) updateMessages(chat *models.Chat) model {
+	inBorder := lipgloss.RoundedBorder()
+	inBorder.BottomLeft = "┴"
+	outBorder := lipgloss.RoundedBorder()
+	outBorder.BottomRight = "┴"
+
+	inMsgStyle := lipgloss.NewStyle().
+		BorderForeground(colMuted).
+		Border(inBorder, true, true, true, true).
+		Padding(0, 1).
+		MarginTop(1)
+
+	outMsgStyle := lipgloss.NewStyle().
+		BorderForeground(colSuccess).
+		Border(outBorder, true, true, true, true).
+		Padding(0, 1).
+		MarginTop(1)
+
 	content := ""
 	for _, msg := range chat.Messages {
-		text := msg.Date + "\n\n" + msg.Content
+		text := msg.Content
 		var msgBubble string
 
+		dateText := msg.Date.Format("Mon, 15:04")
 		if strings.Contains(msg.Id, "mchat") { // TODO: tmp solution for outgoing msgs
-			msgBubble = messageStyle.MarginLeft(60).BorderForeground(lipgloss.Color("#00ff00")).Align(lipgloss.Right).Render(text)
+			msgBubble = outMsgStyle.MarginLeft(60).Render(text)
+			msgBubble = lipgloss.JoinVertical(lipgloss.Right, msgBubble, lipgloss.NewStyle().Foreground(colMuted).Render(dateText))
 		} else {
-			msgBubble = messageStyle.Render(text)
+			msgBubble = inMsgStyle.Render(text)
+			msgBubble = lipgloss.JoinVertical(lipgloss.Left, msgBubble, lipgloss.NewStyle().Foreground(colMuted).Render(dateText))
 		}
 		content = lipgloss.JoinVertical(lipgloss.Left, content, msgBubble)
 	}

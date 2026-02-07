@@ -102,6 +102,7 @@ func (c *Connection) XOAuth2(user, token string) error {
 		return err
 	}
 	if _, err := c.checkResponseOK(); err != nil {
+		log.Println("pop3 authentication failed")
 		return err
 	}
 	return nil
