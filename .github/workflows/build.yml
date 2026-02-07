@@ -38,7 +38,7 @@ jobs:
             CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build \
               -ldflags="-X 'mchat/internal/auth_google.clientID=$GOOGLE_CLIENT_ID' \
               -X 'mchat/internal/auth_google.clientSecret=$GOOGLE_CLIENT_SECRET' -s -w" \
-              -o "$BINARY_NAME" .
+              -o "$BINARY_NAME" ./cmd/mchat
             
             if [ "$OS" == "windows" ]; then
               zip "mchat-${OS}-${ARCH}.zip" "$BINARY_NAME"
