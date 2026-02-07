@@ -61,8 +61,12 @@ func (s *DataService) loadExistingMessages() error {
 
 func (s *DataService) startPolling() {
 	for {
-		log.Println("checking for updates..")
-		s.fetchMessages()
+		if s.cfg.User != "" {
+			log.Println("checking for updates..")
+			s.fetchMessages()
+		} else {
+			log.Println("app not configured yet. skiping fetch")
+		}
 		time.Sleep(time.Second * 15)
 	}
 }

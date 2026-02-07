@@ -1,0 +1,59 @@
+name: Release Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build and Package (The Bash Way)
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          # Define platforms to build for
+          PLATFORMS=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            OS=${PLATFORM%/*}
+            ARCH=${PLATFORM#*/}
+            BINARY_NAME="mchat"
+            
+            if [ "$OS" == "windows" ]; then BINARY_NAME="mchat.exe"; fi
+            
+            echo "Building for $OS/$ARCH..."
+            CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build \
+              -ldflags="-X 'mchat/internal/auth_google.clientID=$GOOGLE_CLIENT_ID' \
+              -X 'mchat/internal/auth_google.clientSecret=$GOOGLE_CLIENT_SECRET' -s -w" \
+              -o "$BINARY_NAME" .
+            
+            if [ "$OS" == "windows" ]; then
+              zip "mchat-${OS}-${ARCH}.zip" "$BINARY_NAME"
+            else
+              tar -czf "mchat-${OS}-${ARCH}.tar.gz" "$BINARY_NAME"
+            fi
+            
+            rm "$BINARY_NAME"
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            mchat-*
