@@ -11,7 +11,7 @@ import (
 type DataService interface {
 	SaveBasicConfig(user, pass string)
 	SaveGoogleConfig(user string, token *oauth2.Token)
-	SendMessage(chat *models.Chat, msg string) (*models.Message, error)
+	SendMessage(m *models.Message) error
 }
 
 var (

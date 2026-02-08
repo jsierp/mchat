@@ -18,6 +18,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const mChatIdHeader = "X-MChat-Id"
+
 type DataService struct {
 	db              *sql.DB
 	cfg             *config.Config
@@ -74,46 +76,35 @@ func (s *DataService) startPolling() {
 	}
 }
 
-func (s *DataService) SendMessage(chat *models.Chat, msg string) (*models.Message, error) {
+func (s *DataService) SendMessage(m *models.Message) error {
+	// Sets From and Id fields - without err - and sends the message
+	m.Id = fmt.Sprintf("<%d@mchat.mchat>", time.Now().UnixNano())
+	m.From = s.cfg.User
+
 	token, err := s.GetActiveToken()
-	if err != nil {
-		return nil, err
-	}
 	smtpAuth := oxsmtp.Auth{User: s.cfg.User, Token: token}
-	msgId := fmt.Sprintf("<%d@mchat.mchat>", time.Now().UnixNano())
-	date := time.Now()
 
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "From: %s\r\n", s.cfg.User)
-	fmt.Fprintf(&b, "From: %s\r\n", s.cfg.User)
-	fmt.Fprintf(&b, "To: %s\r\n", chat.Address)
-	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&b, "From: %s\r\n", m.From)
+	fmt.Fprintf(&b, "To: %s\r\n", m.ChatAddress)
+	fmt.Fprintf(&b, "Date: %s\r\n", m.Date.Format(time.RFC1123Z))
 	fmt.Fprintf(&b, "Subject: Notification from MChat\r\n")
 	fmt.Fprintf(&b, "MIME-Version: 1.0\r\n")
 	fmt.Fprintf(&b, "Content-Type: text/plain; charset=\"utf-8\"\r\n")
-	fmt.Fprintf(&b, "X-MCHAT-ID: %s\r\n", msgId)
+	fmt.Fprintf(&b, "%s: %s\r\n", mChatIdHeader, m.Id)
 	fmt.Fprintf(&b, "\r\n")
-	fmt.Fprint(&b, msg)
+	fmt.Fprint(&b, m.Content)
 
-	err = smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{chat.Address}, b.Bytes())
+	err = smtp.SendMail("smtp.gmail.com:587", smtpAuth, s.cfg.User, []string{m.ChatAddress}, b.Bytes())
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	m := &models.Message{
-		Id:          msgId,
-		From:        s.cfg.User,
-		To:          chat.Address,
-		Contact:     chat.Address,
-		ChatAddress: chat.Address,
-		Content:     msg,
-		Date:        date,
-	}
 	err = storage.SaveMessage(s.db, m)
 	if err != nil {
-		log.Println(err)
+		log.Println("error when saving the message", err)
 	}
-	return m, nil
+	return nil
 }
 
 func (s *DataService) SaveBasicConfig(user, pass string) {

@@ -86,7 +86,7 @@ func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 		content = ""
 	}
 	date, err := msg.Header.Date()
-	id := msg.Header.Get("X-MCHAT-ID")
+	id := msg.Header.Get(mChatIdHeader)
 	if id == "" {
 		id = msg.Header.Get("Message-ID")
 	}

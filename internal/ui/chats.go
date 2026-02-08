@@ -4,6 +4,7 @@ import (
 	"log"
 	"mchat/internal/models"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -30,6 +31,11 @@ func (i contactItem) Description() string {
 	return i.description
 }
 func (i contactItem) FilterValue() string { return i.title }
+
+type sendMessageResult struct {
+	msg *models.Message
+	err error
+}
 
 type chatsModel struct {
 	chats []*models.Chat
@@ -158,21 +164,36 @@ func (m model) helpChats() string {
 	return s
 }
 
+func messageStatusBar(m *models.Message) string {
+	dateText := m.Date.Format("Mon, 15:04")
+	bar := lipgloss.NewStyle().Foreground(colMuted).Render(dateText)
+	if m.ChatAddress != m.From {
+		switch m.Status {
+		case models.MsgStatusSuccess:
+			bar += " " + lipgloss.NewStyle().Foreground(colSuccess).Render("✓ ")
+		case models.MsgStatusSending:
+			bar += " " + lipgloss.NewStyle().Foreground(colWarning).Render("🗘 ")
+		case models.MsgStatusError:
+			bar += " " + lipgloss.NewStyle().Foreground(colDanger).Render("‼ ")
+		}
+	}
+	return bar
+}
+
 func (m model) updateMessages(chat *models.Chat) model {
 	content := ""
 	for _, msg := range chat.Messages {
 		text := msg.Content
 		var msgBubble string
-		dateText := msg.Date.Format("Mon, 15:04")
 		msgWidth := min(lipgloss.Width(text)+2, m.chats.messagesViewport.Width/10*9)
 
-		if strings.Contains(msg.Id, "mchat") { // TODO: tmp solution for outgoing msgs
+		if msg.ChatAddress != msg.From {
 			msgBubble = outMsgStyle.Width(msgWidth).Render(text)
-			msgBubble = lipgloss.JoinVertical(lipgloss.Right, msgBubble, lipgloss.NewStyle().Foreground(colMuted).Render(dateText))
+			msgBubble = lipgloss.JoinVertical(lipgloss.Right, msgBubble, messageStatusBar(msg))
 			msgBubble = lipgloss.NewStyle().Width(m.chats.messagesViewport.Width - 2).Align(lipgloss.Right).Render(msgBubble)
 		} else {
 			msgBubble = inMsgStyle.Width(msgWidth).Render(text)
-			msgBubble = lipgloss.JoinVertical(lipgloss.Left, msgBubble, lipgloss.NewStyle().Foreground(colMuted).Render(dateText))
+			msgBubble = lipgloss.JoinVertical(lipgloss.Left, msgBubble, messageStatusBar(msg))
 		}
 		content = lipgloss.JoinVertical(lipgloss.Left, content, msgBubble)
 	}
@@ -200,6 +221,20 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, nil
+
+	case sendMessageResult:
+		if msg.err != nil {
+			log.Println("error while sending the message", msg.err)
+			msg.msg.Status = models.MsgStatusError
+		} else {
+			msg.msg.Status = models.MsgStatusSuccess
+		}
+		index := m.chats.contactsList.Index()
+		if len(m.chats.chats) > 0 && m.chats.chats[index].Address == msg.msg.ChatAddress {
+			m = m.updateMessages(m.chats.chats[index])
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.focus {
 
@@ -273,11 +308,17 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusChat
 				return m, nil
 			case "enter":
+				content := m.chats.textInput.Value()
+				content = strings.TrimSpace(content)
+				if content == "" {
+					return m, nil
+				}
 				index := m.chats.contactsList.Index()
-				msg, err := m.svc.SendMessage(m.chats.chats[index], m.chats.textInput.Value())
-				if err != nil {
-					// TODO - handle error
-					log.Println(err)
+				msg := prepareMessage(m.chats.chats[index], content)
+
+				cmdSend := func() tea.Msg {
+					err := m.svc.SendMessage(msg)
+					return sendMessageResult{msg: msg, err: err}
 				}
 				m = m.newMessage(msg)
 				m.chats.messagesViewport.GotoBottom()
@@ -285,7 +326,7 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.chats.textInput.SetValue("")
 				m.chats.textInput.Blur()
 
-				return m, nil
+				return m, cmdSend
 			}
 			m.chats.textInput, cmd = m.chats.textInput.Update(msg)
 			return m, cmd
@@ -327,4 +368,15 @@ func appendIfNew(msgs []*models.Message, msg *models.Message) []*models.Message 
 		}
 	}
 	return append(msgs, msg)
+}
+
+func prepareMessage(c *models.Chat, s string) *models.Message {
+	return &models.Message{
+		To:          c.Address,
+		Contact:     c.Name,
+		ChatAddress: c.Address,
+		Content:     s,
+		Date:        time.Now(),
+		Status:      models.MsgStatusSending,
+	}
 }
