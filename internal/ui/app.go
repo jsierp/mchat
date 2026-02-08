@@ -19,6 +19,7 @@ var (
 	colPrimary      = lipgloss.AdaptiveColor{Light: "#81c8be", Dark: "#81c8be"}
 	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#528a82", Dark: "#528a82"}
 	colSuccess      = lipgloss.AdaptiveColor{Light: "#a3be8c", Dark: "#a3be8c"}
+	colSuccessMuted = lipgloss.AdaptiveColor{Light: "#7a8c6d", Dark: "#7a8c6d"}
 	colWarning      = lipgloss.AdaptiveColor{Light: "#ebcb8b", Dark: "#ebcb8b"}
 	colDanger       = lipgloss.AdaptiveColor{Light: "#bf616a", Dark: "#bf616a"}
 	colMuted        = lipgloss.AdaptiveColor{Light: "#777777", Dark: "#777777"}
@@ -27,8 +28,9 @@ var (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Foreground(colSuccess).
-			MarginBottom(1).
-			MarginLeft(1).
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(colSuccess).
+			PaddingLeft(1).
 			Bold(true)
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
@@ -57,17 +59,12 @@ type model struct {
 	view  view
 	focus focus
 
+	width  int
+	height int
+
 	chats chatsModel
 	cfg   configModel
 }
-
-type listItem struct {
-	title, description string
-}
-
-func (i listItem) Title() string       { return i.title }
-func (i listItem) Description() string { return i.description }
-func (i listItem) FilterValue() string { return i.title }
 
 func InitialModel(svc DataService) model {
 	return model{
@@ -90,6 +87,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(*models.Message); ok {
 		return m.newMessage(msg), nil
 	}
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = msg.Width
+		m.height = msg.Height
+	}
 
 	switch m.view {
 	case viewChats:
@@ -101,7 +102,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	title := titleStyle.Render("mChat - the only messaging app you need")
+	title := titleStyle.Width(m.width).Render("mChat - the only messaging app you need")
 	var viewContent string
 
 	switch m.view {

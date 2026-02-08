@@ -115,6 +115,7 @@ func removeQuotedText(s string) string {
 		if l != "" && l[0] == '>' {
 			// Google
 			stopAt = max(0, i-3)
+			break
 		}
 	}
 	if stopAt == 0 {
