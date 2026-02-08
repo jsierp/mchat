@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/base64"
 	"io"
+	"log"
 	"mchat/internal/models"
 	"mime"
 	"mime/multipart"
@@ -86,6 +87,9 @@ func (s *DataService) processMessage(msg *mail.Message) *models.Message {
 		content = ""
 	}
 	date, err := msg.Header.Date()
+	if err != nil {
+		log.Println(err)
+	}
 	id := msg.Header.Get(mChatIdHeader)
 	if id == "" {
 		id = msg.Header.Get("Message-ID")

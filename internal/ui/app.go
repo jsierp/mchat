@@ -16,8 +16,8 @@ type DataService interface {
 
 var (
 	// TODO - light palette needs rework
-	colPrimary      = lipgloss.AdaptiveColor{Light: "#81c8be", Dark: "#81c8be"}
-	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#528a82", Dark: "#528a82"}
+	colPrimary      = lipgloss.AdaptiveColor{Light: "#ef9f76", Dark: "#ef9f76"}
+	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#b88a75", Dark: "#b88a75"}
 	colSuccess      = lipgloss.AdaptiveColor{Light: "#a3be8c", Dark: "#a3be8c"}
 	colSuccessMuted = lipgloss.AdaptiveColor{Light: "#7a8c6d", Dark: "#7a8c6d"}
 	colWarning      = lipgloss.AdaptiveColor{Light: "#ebcb8b", Dark: "#ebcb8b"}
@@ -34,8 +34,10 @@ var (
 			Bold(true)
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
-			MarginLeft(2).
-			MarginTop(1)
+			Border(lipgloss.NormalBorder(), true, false, false, false).
+			BorderForeground(colSuccess).
+			MarginTop(1).
+			PaddingLeft(1)
 )
 
 type view int

@@ -82,6 +82,9 @@ func (s *DataService) SendMessage(m *models.Message) error {
 	m.From = s.cfg.User
 
 	token, err := s.GetActiveToken()
+	if err != nil {
+		return err
+	}
 	smtpAuth := oxsmtp.Auth{User: s.cfg.User, Token: token}
 
 	var b bytes.Buffer

@@ -47,8 +47,8 @@ type chatsModel struct {
 
 var (
 	chatStyle = lipgloss.NewStyle().
-			PaddingLeft(2).
-			BorderForeground(colPrimaryMuted)
+			Border(lipgloss.NormalBorder(), false, false, false, true).Padding(0, 0, 0, 1).
+			BorderForeground(colMuted)
 	inputStyle = lipgloss.NewStyle().
 			BorderForeground(colPrimary).
 			Padding(1)
@@ -57,7 +57,8 @@ var (
 )
 
 var chatFocusedStyle = chatStyle.
-	Border(lipgloss.ThickBorder(), false, false, false, true).Padding(0, 0, 0, 1)
+	Border(lipgloss.ThickBorder(), false, false, false, true).Padding(0, 0, 0, 1).
+	BorderForeground(colPrimaryMuted)
 
 func getInMsgStyle() lipgloss.Style {
 	border := lipgloss.RoundedBorder()
@@ -156,12 +157,7 @@ func (m model) viewChats() string {
 }
 
 func (m model) helpChats() string {
-	s := helpStyle.Render("\nControls:")
-	s += helpStyle.Render("• r: refresh")
-	s += helpStyle.Render("• a: add a chat")
-	s += helpStyle.Render("• c: enter config")
-	s += helpStyle.Render("• q: quit")
-	return s
+	return helpStyle.Width(m.width).Render("Press ? for help")
 }
 
 func messageStatusBar(m *models.Message) string {
@@ -212,8 +208,8 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chats.messagesViewport.Width = w - w/4
 		m.chats.textInput.Width = w - w/4 - 5
 
-		m.chats.contactsList.SetHeight(msg.Height - 20)
-		m.chats.messagesViewport.Height = msg.Height - 20
+		m.chats.contactsList.SetHeight(msg.Height - 10)
+		m.chats.messagesViewport.Height = msg.Height - 8
 
 		index := m.chats.contactsList.Index()
 		if len(m.chats.chats) > 0 {
