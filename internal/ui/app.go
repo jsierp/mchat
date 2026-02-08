@@ -16,8 +16,8 @@ type DataService interface {
 
 var (
 	// TODO - light palette needs rework
-	colPrimary      = lipgloss.AdaptiveColor{Light: "#ef9f76", Dark: "#ef9f76"}
-	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#b88a75", Dark: "#b88a75"}
+	colPrimary      = lipgloss.AdaptiveColor{Light: "#e5c890", Dark: "#e5c890"}
+	colPrimaryMuted = lipgloss.AdaptiveColor{Light: "#a39374", Dark: "#a39374"}
 	colSuccess      = lipgloss.AdaptiveColor{Light: "#a3be8c", Dark: "#a3be8c"}
 	colSuccessMuted = lipgloss.AdaptiveColor{Light: "#7a8c6d", Dark: "#7a8c6d"}
 	colWarning      = lipgloss.AdaptiveColor{Light: "#ebcb8b", Dark: "#ebcb8b"}
@@ -45,6 +45,7 @@ type view int
 const (
 	viewChats view = iota
 	viewConfig
+	viewHelp
 )
 
 type focus int
@@ -99,6 +100,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateChats(msg)
 	case viewConfig:
 		return m.updateConfig(msg)
+	case viewHelp:
+		return m.updateHelp(msg)
 	}
 	return m, nil
 }
@@ -112,7 +115,13 @@ func (m model) View() string {
 		viewContent = m.viewChats()
 	case viewConfig:
 		viewContent = m.viewConfig()
+	case viewHelp:
+		viewContent = m.viewHelp()
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, viewContent)
+}
+
+func (m model) viewHelpBar(s string) string {
+	return helpStyle.Width(m.width).Render(s)
 }

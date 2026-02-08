@@ -65,7 +65,7 @@ func initConfigModel() configModel {
 			title:       microsoftTitle,
 			description: "Use Outlook Account",
 		},
-	}, list.NewDefaultDelegate(), 40, 10)
+	}, listDelegate(false), 40, 10)
 	cfglist.SetShowStatusBar(false)
 	cfglist.SetFilteringEnabled(false)
 	cfglist.SetShowTitle(false)
@@ -89,9 +89,16 @@ func viewURL(url string) string {
 }
 
 func (m model) viewConfig() string {
-	email := m.cfg.emailInput.View()
+	var input string
+	if m.cfg.focus == cfgFocusEmailInput {
+		input = inputStyle.Border(lipgloss.RoundedBorder()).Padding(0).Render(m.cfg.emailInput.View())
+	} else {
+		input = inputStyle.Border(lipgloss.RoundedBorder()).Padding(0).
+			Foreground(colSuccess).BorderForeground(colSuccess).Render(m.cfg.emailInput.View())
+	}
+
 	l := cfgListStyle.Render(m.cfg.list.View())
-	view := lipgloss.JoinVertical(lipgloss.Top, email, l)
+	view := lipgloss.JoinVertical(lipgloss.Center, input, l)
 
 	if m.cfg.focus == cfgFocusUrl {
 		i := m.cfg.list.SelectedItem()
@@ -99,17 +106,15 @@ func (m model) viewConfig() string {
 		if i, ok := i.(configItem); ok && (i.title == googleTitle) {
 			url = viewURL(m.cfg.googleUrl)
 		}
-		view = lipgloss.JoinVertical(lipgloss.Top, view, url)
+		view = lipgloss.JoinVertical(lipgloss.Center, view, url)
 	}
-	view += m.helpConfig()
-	return view
-}
 
-func (m model) helpConfig() string {
-	s := helpStyle.Render("\nControls:")
-	s += helpStyle.Render("• esc: back to chats list")
-	s += helpStyle.Render("• q: quit")
-	return s
+	w := lipgloss.Width(view)
+	h := lipgloss.Height(view)
+	style := lipgloss.NewStyle().PaddingTop(m.height/2 - h/2 - 2).PaddingLeft(m.width/2 - w/2).Height(m.height - 4)
+	view = style.Render(view)
+	view += m.viewHelpBar("Press ? for help")
+	return view
 }
 
 func (m model) leaveConfig() (model, tea.Cmd) {
@@ -158,6 +163,13 @@ func (m model) updateConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc":
 				return m.leaveConfig()
+			case "?":
+				m.view = viewHelp
+				return m, nil
+			case "shift+tab":
+				m.cfg.emailInput.Focus()
+				m.cfg.focus = cfgFocusEmailInput
+				return m, nil
 			case "enter":
 				index := m.cfg.list.Index()
 				items := m.cfg.list.Items()
@@ -166,6 +178,7 @@ func (m model) updateConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 					items[index] = item
 					m.cfg.focus = cfgFocusUrl
 				}
+				m.cfg.list.SetDelegate(listDelegate(true))
 				m.cfg.list.SetItems(items)
 				svc := auth_google.NewGoogleAuthService()
 				m.cfg.googleUrl = svc.GetGoogleUrl()
@@ -178,8 +191,22 @@ func (m model) updateConfig(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q":
 				return m, tea.Quit
+			case "?":
+				m.view = viewHelp
+				return m, nil
 			case "esc":
 				return m.leaveConfig()
+			case "shift+tab":
+				m.cfg.focus = cfgFocusList
+				index := m.cfg.list.Index()
+				items := m.cfg.list.Items()
+				if item, ok := items[index].(configItem); ok {
+					item.selected = false
+					items[index] = item
+				}
+				m.cfg.list.SetDelegate(listDelegate(false))
+				m.cfg.list.SetItems(items)
+				return m, nil
 			}
 		}
 	case authResult:

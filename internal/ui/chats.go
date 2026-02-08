@@ -152,12 +152,8 @@ func (m model) viewChats() string {
 	width := lipgloss.Width(list)
 	list = lipgloss.NewStyle().PaddingRight(m.chats.contactsList.Width() - width).Render(list)
 	content := lipgloss.JoinHorizontal(lipgloss.Top, list, m.viewChat())
-	content += m.helpChats()
+	content += m.viewHelpBar("Press ? for help")
 	return content
-}
-
-func (m model) helpChats() string {
-	return helpStyle.Width(m.width).Render("Press ? for help")
 }
 
 func messageStatusBar(m *models.Message) string {
@@ -238,6 +234,9 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q":
 				return m, tea.Quit
+			case "?":
+				m.view = viewHelp
+				return m, nil
 			case "c":
 				m.view = viewConfig
 				return m, nil
@@ -266,6 +265,9 @@ func (m model) updateChats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q":
 				return m, tea.Quit
+			case "?":
+				m.view = viewHelp
+				return m, nil
 			case "h", "left", "esc", "shift+tab":
 				m.focus = focusChats
 
