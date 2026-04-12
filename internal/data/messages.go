@@ -126,9 +126,9 @@ func removeQuotedText(s string) string {
 		return s
 	}
 
-	res := ""
+	var res strings.Builder
 	for _, l := range lines[:stopAt] {
-		res += l
+		res.WriteString(l)
 	}
-	return strings.TrimSpace(res)
+	return strings.TrimSpace(res.String())
 }

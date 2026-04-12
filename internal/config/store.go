@@ -13,7 +13,7 @@ import (
 type Config struct {
 	User     string       `json:"user"`
 	Password string       `json:"password,omitempty"`
-	Token    oauth2.Token `json:"token,omitempty"`
+	Token    oauth2.Token `json:"token"`
 }
 
 func GetDefault() *Config {
