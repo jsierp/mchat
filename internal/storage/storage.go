@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func getPath() (string, error) {
+func GetPath() (string, error) {
 	path := filepath.Join(xdg.DataHome, "mchat", "mchat.db")
 	dir := filepath.Dir(path)
 	err := os.MkdirAll(dir, 0700)
@@ -34,11 +34,15 @@ func initDb(db *sql.DB) error {
 }
 
 func GetDB() (*sql.DB, error) {
-	path, err := getPath()
+	path, err := GetPath()
 	if err != nil {
 		return nil, err
 	}
 
+	return OpenDB(path)
+}
+
+func OpenDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err

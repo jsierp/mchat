@@ -1,11 +1,26 @@
 # mchat
-A terminal-based email client that feels like a chat
 
+`mchat` is a terminal email client that presents email threads like chats. It includes its own POP3 and SMTP implementations in Go.
 
-## Roadmap
+## Run
 
-1. Use a package for POP3 username + password login.
-2. Built a terminal interface to login + browse emails.
-3. Use a package for SMTP username + password login.
-4. Implement POP3 without external dependencies.
-5. Implement SMTP without external dependencies.
+Seed fake data into the app's normal database/config locations:
+
+```bash
+go run ./cmd/mchat-seed --force
+```
+
+Start the app:
+
+```bash
+go run ./cmd/mchat
+```
+
+## Use
+
+- Open the chats list on startup.
+- Press `Enter` to open a conversation.
+- Press `Tab` to move into the message box.
+- Press `c` to open config.
+- Press `?` for help.
+- Press `q` to quit.

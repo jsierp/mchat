@@ -8,5 +8,8 @@ build:
 run: build
 	@./$(BINARY_NAME)
 
+seed:
+	@go run ./cmd/mchat-seed --force
+
 clean:
 	@rm -f $(BINARY_NAME)
