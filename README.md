@@ -15,8 +15,8 @@ Start the app:
 ```bash
 go run ./cmd/mchat
 ```
-
-[Watch the demo video](./mchat.webm)
+<video src="./mchat.webm" autoplay="autoplay" muted="muted" loop="loop" style="max-width: 100%;">
+</video>
 
 ## Use
 
