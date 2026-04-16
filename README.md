@@ -16,6 +16,8 @@ Start the app:
 go run ./cmd/mchat
 ```
 
+[Watch the demo video](./mchat.webm)
+
 ## Use
 
 - Open the chats list on startup.
